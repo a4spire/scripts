@@ -5,3 +5,8 @@ dist/
 *.spec.bak
 .venv/
 venv/
+
+# Keygen secrets: the private signing key must never be committed.
+keygen/keys/
+keygen/issued_keys.csv
+*.lic
