@@ -114,10 +114,29 @@ photo_batch_tool/
 - Erste `rembg`-Ausführung ist langsam (Modell-Download/-Ladezeit).
 - Unterstützte Bildformate: JPEG, PNG, TIFF, BMP.
 
+### Modell wird beim Build eingebettet (keine Internetverbindung beim Endnutzer nötig)
+
+Der GitHub-Actions-Workflow lädt das U2Net-Modell (~170 MB) bereits während
+des Windows-Builds herunter (der Build-Runner hat garantiert Internetzugang)
+und bettet es in die `.exe` ein. Beim ersten Start kopiert das Programm das
+eingebettete Modell automatisch nach `%USERPROFILE%\.u2net\u2net.onnx` – der
+Endnutzer-Rechner braucht dafür **keine eigene Internetverbindung mehr**.
+Das gilt nur für die per GitHub Actions gebaute `.exe` aus diesem Repo, nicht
+für einen manuellen `pyinstaller`-Build ohne den Modell-Download-Schritt aus
+der Workflow-Datei.
+
 ### Fehlerbehebung: Hintergrundentfernung hängt / reagiert nicht
 
-`rembg` lädt beim allerersten Aufruf ein KI-Modell (~170 MB) aus dem
-Internet herunter und legt es lokal ab unter:
+Falls trotzdem keine Reaktion kommt (z.B. bei `python main.py` aus dem
+Quellcode ohne eingebettetes Modell, oder wenn der Build ohne den
+Modell-Download-Schritt lief): `rembg` versucht dann beim allerersten Aufruf,
+das Modell selbst herunterzuladen, von
+
+```
+https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx
+```
+
+und legt es lokal ab unter:
 
 ```
 %USERPROFILE%\.u2net\u2net.onnx
@@ -133,13 +152,14 @@ wirken.
 
 **Abhilfe:**
 
-1. Prüfen, ob der Rechner grundsätzlich Internetzugang hat (z.B. eine
-   beliebige Webseite im Browser öffnen). Falls nicht: Netzwerk/Firewall
-   des Test-Rechners prüfen bzw. mit der IT-Abteilung klären, dass
-   ausgehende HTTPS-Verbindungen für den einmaligen Modell-Download
-   erlaubt sind.
-2. **Ohne Internet auf dem Zielrechner:** Auf einem anderen Rechner, auf
-   dem das Programm bereits erfolgreich einmal gelaufen ist, liegt das
-   Modell bereits unter `%USERPROFILE%\.u2net\u2net.onnx`. Diese Datei
-   (~170 MB) einfach in den gleichen Ordner auf dem Zielrechner kopieren –
+1. Die offizielle, per GitHub Actions gebaute `.exe` verwenden (siehe oben) –
+   die braucht gar keinen eigenen Download mehr.
+2. Falls doch ein eigener Download nötig ist: prüfen, ob der Rechner
+   grundsätzlich Internetzugang hat (z.B. eine beliebige Webseite im Browser
+   öffnen). Falls nicht: Netzwerk/Firewall des Test-Rechners prüfen bzw. mit
+   der IT-Abteilung klären, dass ausgehende HTTPS-Verbindungen zu
+   `github.com` erlaubt sind.
+3. **Ohne Internet auf dem Zielrechner:** Die Datei `u2net.onnx` (~170 MB,
+   z.B. von einem anderen Rechner mit funktionierendem Internet oder direkt
+   über obige URL) manuell nach `%USERPROFILE%\.u2net\u2net.onnx` kopieren –
    danach braucht `rembg` keine Internetverbindung mehr.
