@@ -38,63 +38,6 @@ Alle Ordner, das Zeitfenster, die Ziel-DPI und die Zielgröße sind über den
 Button **Einstellungen** in der GUI konfigurierbar und werden in
 `%APPDATA%\PhotoBatchTool\config.json` gespeichert.
 
-### Lizenzsystem
-
-Das Programm prüft beim Start eine Lizenz:
-
-- **Erstinstallation**: automatische Testphase von 6 Monaten ab dem ersten
-  Programmstart (Installationsdatum wird in
-  `%APPDATA%\PhotoBatchTool\license.json` und zusätzlich in der Windows-Registry
-  gespeichert, damit das Löschen einer der beiden Stellen die Testphase nicht
-  zurücksetzt).
-- Läuft die Testphase ab (oder ein eingegebener Lizenzschlüssel), öffnet sich
-  beim nächsten Start ein Dialog, der einen gültigen Lizenzschlüssel verlangt.
-  Ohne gültigen Schlüssel lässt sich das Programm nicht weiter nutzen.
-- Über den Button **Lizenz verwalten** im Hauptfenster lässt sich jederzeit
-  der aktuelle Status einsehen oder ein neuer Schlüssel eingeben (z.B. Upgrade
-  von der Testphase auf eine bezahlte Lizenz).
-
-**Technisch**: Lizenzschlüssel sind mit Ed25519 signierte, Base32-kodierte
-Zeichenketten (`XXXXX-XXXXX-...`), die ein Ablaufdatum enthalten. Die App
-enthält nur den **öffentlichen** Schlüssel (`photo_batch_tool/licensing.py`,
-`PUBLIC_KEY_B64`) und kann damit ausschließlich Signaturen *prüfen* – neue
-gültige Schlüssel lassen sich nur mit dem privaten Schlüssel erzeugen, der
-ausschließlich lokal beim Entwickler liegt (`keygen/keys/private_key.pem`,
-per `.gitignore` von Git ausgeschlossen). Das ist bewusst kein
-hundertprozentiger Kopierschutz (ein versierter Nutzer könnte lokale Dateien
-manipulieren), aber ein für ein Werkzeug dieser Größenordnung angemessener
-Schutz gegen einfaches Weiterreichen oder Zurücksetzen der Testphase.
-
-#### Keygen-Tool (nur für dich als Entwickler/Verkäufer)
-
-`keygen/keygen.py` ist ein separates, kleines Tkinter-Tool – es wird **nicht**
-in die Kunden-EXE gebaut (es liegt außerhalb von `photo_batch_tool/` und wird
-von `main.py` nicht importiert).
-
-```powershell
-python keygen\keygen.py
-```
-
-Beim ersten Start erzeugt es automatisch ein neues Ed25519-Schlüsselpaar unter
-`keygen/keys/private_key.pem` und zeigt den zugehörigen **öffentlichen**
-Schlüssel an (Button "Kopieren"). Dieser muss einmalig in
-`photo_batch_tool/licensing.py` als `PUBLIC_KEY_B64` eingetragen werden,
-bevor die Kunden-EXE gebaut wird (ist in diesem Repo bereits erledigt).
-
-Im Tool selbst: Gültigkeitsdauer (Tage/Monate/Jahre) und optional eine
-Kunden-Referenz eingeben, auf "Schlüssel generieren" klicken – der fertige
-Lizenzschlüssel erscheint zum Kopieren oder Speichern als `.lic`-Datei.
-Alle erzeugten Schlüssel werden zur eigenen Buchhaltung lokal in
-`keygen/issued_keys.csv` protokolliert (ebenfalls von Git ausgeschlossen).
-
-**Wichtig:** `keygen/keys/private_key.pem` ist das "Geheimnis" des gesamten
-Systems – wer diese Datei besitzt, kann beliebig viele gültige Lizenzen
-erzeugen. Niemals committen, teilen oder auf einem Kundenrechner ablegen.
-Sicher (z.B. Passwort-Manager, verschlüsseltes Offline-Backup) aufbewahren;
-bei Verlust müssen ein neues Schlüsselpaar erzeugt und der neue öffentliche
-Schlüssel in `licensing.py` eingetragen werden (bereits ausgegebene alte
-Lizenzschlüssel werden dadurch ungültig).
-
 ### Installation
 
 Voraussetzung: Python 3.10+ für Windows (von python.org, enthält Tkinter).
@@ -154,8 +97,6 @@ photo_batch_tool/
   exif_utils.py                EXIF-Zeitstempel auslesen
   series_builder.py            Gruppierung neuer Fotos zu Serien
   watcher.py                   Ordnerüberwachung (watchdog)
-  license_format.py            Gemeinsames Schlüssel-Binärformat (keine Geheimnisse)
-  licensing.py                 Lizenzprüfung (Public Key), Testphasen-Tracking
   processing/
     background_removal.py      rembg-Anbindung
     circle_crop.py              Kreisförmiger Zuschnitt
@@ -166,10 +107,6 @@ photo_batch_tool/
     series_selector.py           Serien-Auswahldialog
     circle_crop_editor.py        Interaktiver Kreis-Editor
     settings_dialog.py           Einstellungsdialog
-    license_dialog.py            Lizenz-Aktivierungs-/Statusdialog
-keygen/
-  keygen.py                     Entwickler-Tool zum Erzeugen von Lizenzschlüsseln
-  keys/private_key.pem          Privater Schlüssel (lokal, NICHT in Git)
 ```
 
 ### Bekannte Grenzen

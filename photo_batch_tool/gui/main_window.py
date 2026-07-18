@@ -13,31 +13,20 @@ from PIL import Image
 
 from ..config import DEFAULT_CONFIG_PATH, Config
 from ..exif_utils import get_photo_timestamp
-from ..licensing import LicenseManager
 from ..processing.background_removal import remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
 from ..series_builder import SeriesBuilder
 from ..watcher import FolderWatcher
 from .circle_crop_editor import CircleCropEditor
-from .license_dialog import LicenseDialog
 from .series_selector import SeriesSelectorDialog
 from .settings_dialog import SettingsDialog
-
-APP_TITLE = "Foto-Batch-Verarbeitung"
 
 
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.withdraw()
-        self.title(APP_TITLE)
-
-        self._license_manager = LicenseManager(DEFAULT_CONFIG_PATH.parent)
-        if not self._check_license():
-            self.after(0, self.destroy)
-            return
-
+        self.title("Foto-Batch-Verarbeitung")
         self.geometry("620x440")
         self.minsize(560, 360)
 
@@ -49,32 +38,8 @@ class MainWindow(tk.Tk):
         self._watching = False
 
         self._build_ui()
-        self._refresh_license_title()
         self.after(300, self._poll_queue)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.deiconify()
-
-    def _check_license(self) -> bool:
-        status = self._license_manager.status()
-        if status.licensed:
-            return True
-        result = {"ok": False}
-        dialog = LicenseDialog(self, self._license_manager, on_result=lambda ok: result.update(ok=ok))
-        self.wait_window(dialog)
-        return result["ok"]
-
-    def _refresh_license_title(self) -> None:
-        status = self._license_manager.status()
-        if status.trial:
-            suffix = f"Testphase: noch {status.days_remaining} Tag(e)"
-        else:
-            suffix = f"Lizenziert bis {status.expires_at:%d.%m.%Y}"
-        self.title(f"{APP_TITLE} — {suffix}")
-
-    def _open_license_dialog(self) -> None:
-        dialog = LicenseDialog(self, self._license_manager, on_result=lambda ok: None)
-        self.wait_window(dialog)
-        self._refresh_license_title()
 
     def _build_ui(self) -> None:
         top = tk.Frame(self)
@@ -83,7 +48,6 @@ class MainWindow(tk.Tk):
         self._toggle_button = tk.Button(top, text="Überwachung starten", command=self._toggle_watch)
         self._toggle_button.pack(side="left")
         tk.Button(top, text="Einstellungen", command=self._open_settings).pack(side="left", padx=6)
-        tk.Button(top, text="Lizenz verwalten", command=self._open_license_dialog).pack(side="left", padx=6)
 
         self._status_var = tk.StringVar(value="Gestoppt")
         tk.Label(self, textvariable=self._status_var, anchor="w").pack(fill="x", padx=10)
