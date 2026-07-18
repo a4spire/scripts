@@ -26,7 +26,10 @@ def remove_background(path: Path) -> Image.Image:
         from rembg import remove
     except ImportError as exc:
         raise BackgroundRemovalError(
-            "Die Bibliothek 'rembg' ist nicht installiert. Bitte 'pip install rembg' ausführen."
+            "Die Bibliothek 'rembg' konnte nicht geladen werden "
+            f"({exc}). Falls sie eigentlich installiert ist, könnte ein Teilmodul fehlen "
+            "(z.B. beim Bau der EXE) statt rembg komplett zu fehlen. "
+            "Bitte 'pip install rembg' ausführen bzw. beim Entwickler die genaue Meldung melden."
         ) from exc
 
     try:
