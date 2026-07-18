@@ -72,6 +72,22 @@ Die fertige `PhotoBatchTool.exe` liegt danach in `dist\`. Hinweise:
   Start heruntergeladen und lokal zwischengespeichert
   (`%USERPROFILE%\.u2net`).
 
+### Fertige .exe ohne eigenen Build herunterladen
+
+Ein GitHub-Actions-Workflow (`.github/workflows/build-windows-exe.yml`)
+baut die `.exe` automatisch auf einem `windows-latest`-Runner bei jedem
+Push auf diesen Branch (oder manuell über "Run workflow").
+
+So kommst du an die Datei:
+
+1. GitHub → Tab **Actions** → Workflow **"Build Windows EXE"** öffnen.
+2. Den neuesten (grünen) Lauf anklicken.
+3. Unter **Artifacts** `PhotoBatchTool-windows-exe` herunterladen (ZIP)
+   und entpacken – enthält `PhotoBatchTool.exe`.
+
+Kein lokales Python oder PyInstaller nötig, nur ein Browser und ein
+GitHub-Account mit Zugriff auf das Repo.
+
 ### Projektstruktur
 
 ```
