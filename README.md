@@ -113,3 +113,33 @@ photo_batch_tool/
 
 - Erste `rembg`-Ausführung ist langsam (Modell-Download/-Ladezeit).
 - Unterstützte Bildformate: JPEG, PNG, TIFF, BMP.
+
+### Fehlerbehebung: Hintergrundentfernung hängt / reagiert nicht
+
+`rembg` lädt beim allerersten Aufruf ein KI-Modell (~170 MB) aus dem
+Internet herunter und legt es lokal ab unter:
+
+```
+%USERPROFILE%\.u2net\u2net.onnx
+```
+
+Ist diese Datei noch nicht vorhanden (oder unvollständig/0 Byte), scheitert
+der Download meist an fehlendem Internet oder einer Firewall/einem Proxy,
+die die Verbindung nicht ablehnen, sondern einfach hängen lassen. Das
+Programm bricht die Hintergrundentfernung nach spätestens 5 Minuten
+(erster Lauf) bzw. 90 Sekunden (danach, wenn das Modell schon lokal liegt)
+mit einer Fehlermeldung ab – bis dahin kann es aber wie ein Einfrieren
+wirken.
+
+**Abhilfe:**
+
+1. Prüfen, ob der Rechner grundsätzlich Internetzugang hat (z.B. eine
+   beliebige Webseite im Browser öffnen). Falls nicht: Netzwerk/Firewall
+   des Test-Rechners prüfen bzw. mit der IT-Abteilung klären, dass
+   ausgehende HTTPS-Verbindungen für den einmaligen Modell-Download
+   erlaubt sind.
+2. **Ohne Internet auf dem Zielrechner:** Auf einem anderen Rechner, auf
+   dem das Programm bereits erfolgreich einmal gelaufen ist, liegt das
+   Modell bereits unter `%USERPROFILE%\.u2net\u2net.onnx`. Diese Datei
+   (~170 MB) einfach in den gleichen Ordner auf dem Zielrechner kopieren –
+   danach braucht `rembg` keine Internetverbindung mehr.

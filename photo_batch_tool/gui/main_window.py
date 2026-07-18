@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import queue
 import shutil
 import threading
@@ -13,7 +14,7 @@ from PIL import Image
 
 from ..config import DEFAULT_CONFIG_PATH, Config
 from ..exif_utils import get_photo_timestamp
-from ..processing.background_removal import remove_background
+from ..processing.background_removal import is_model_cached, remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
 from ..series_builder import SeriesBuilder
@@ -21,6 +22,10 @@ from ..watcher import FolderWatcher
 from .circle_crop_editor import CircleCropEditor
 from .series_selector import SeriesSelectorDialog
 from .settings_dialog import SettingsDialog
+
+# First run downloads a ~170 MB model; later runs use the cached copy and should be fast.
+_MODEL_DOWNLOAD_TIMEOUT_SECONDS = 300
+_PROCESSING_TIMEOUT_SECONDS = 90
 
 
 class MainWindow(tk.Tk):
@@ -121,24 +126,41 @@ class MainWindow(tk.Tk):
         SeriesSelectorDialog(self, photos, on_confirm=lambda selected: self._start_processing(photos, selected))
 
     def _start_processing(self, series_photos: List[Path], selected: Path) -> None:
-        self._log_message(
-            f"Verarbeite ausgewähltes Foto: {selected.name} "
-            "(Hintergrundentfernung kann beim allerersten Mal mehrere Minuten dauern, "
-            "da ein KI-Modell heruntergeladen wird)"
-        )
+        if is_model_cached():
+            hint = ""
+        else:
+            hint = " (erster Lauf: lädt ein ~170 MB KI-Modell herunter, kann mehrere Minuten dauern)"
+        self._log_message(f"Verarbeite ausgewähltes Foto: {selected.name}{hint}")
         threading.Thread(
             target=self._background_remove_worker, args=(series_photos, selected), daemon=True
         ).start()
 
     def _background_remove_worker(self, series_photos: List[Path], selected: Path) -> None:
+        timeout = _PROCESSING_TIMEOUT_SECONDS if is_model_cached() else _MODEL_DOWNLOAD_TIMEOUT_SECONDS
+        # remove_background() can hang indefinitely (e.g. a firewall silently dropping the
+        # model-download connection instead of refusing it), so it must run behind a hard
+        # timeout -- otherwise a network hang looks exactly like a frozen app, with no error.
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(remove_background, selected)
         try:
-            result = remove_background(selected)
+            result = future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            message = (
+                f"Die Hintergrundentfernung hat nach {timeout} Sekunden nicht reagiert. "
+                "Vermutlich hängt der Download des rembg-KI-Modells fest (kein Internet oder "
+                "eine Firewall/ein Proxy blockiert die Verbindung, statt sie abzulehnen). "
+                "Siehe README, Abschnitt 'rembg-Modell manuell installieren'."
+            )
+            self.after(0, lambda: self._handle_processing_error(series_photos, message))
+            return
         except ProcessingError as exc:
             self.after(0, lambda: self._handle_processing_error(series_photos, str(exc)))
             return
         except Exception as exc:  # pragma: no cover - safety net for truly unexpected failures
             self.after(0, lambda: self._handle_processing_error(series_photos, f"Unerwarteter Fehler: {exc}"))
             return
+        finally:
+            executor.shutdown(wait=False)
         self.after(0, lambda: self._safe_step(series_photos, lambda: self._open_circle_editor(series_photos, selected, result)))
 
     def _safe_step(self, series_photos: List[Path], step: Callable[[], None]) -> None:
