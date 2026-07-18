@@ -7,7 +7,7 @@ import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, simpledialog
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from PIL import Image
 
@@ -121,7 +121,11 @@ class MainWindow(tk.Tk):
         SeriesSelectorDialog(self, photos, on_confirm=lambda selected: self._start_processing(photos, selected))
 
     def _start_processing(self, series_photos: List[Path], selected: Path) -> None:
-        self._log_message(f"Verarbeite ausgewähltes Foto: {selected.name}")
+        self._log_message(
+            f"Verarbeite ausgewähltes Foto: {selected.name} "
+            "(Hintergrundentfernung kann beim allerersten Mal mehrere Minuten dauern, "
+            "da ein KI-Modell heruntergeladen wird)"
+        )
         threading.Thread(
             target=self._background_remove_worker, args=(series_photos, selected), daemon=True
         ).start()
@@ -132,7 +136,19 @@ class MainWindow(tk.Tk):
         except ProcessingError as exc:
             self.after(0, lambda: self._handle_processing_error(series_photos, str(exc)))
             return
-        self.after(0, lambda: self._open_circle_editor(series_photos, selected, result))
+        except Exception as exc:  # pragma: no cover - safety net for truly unexpected failures
+            self.after(0, lambda: self._handle_processing_error(series_photos, f"Unerwarteter Fehler: {exc}"))
+            return
+        self.after(0, lambda: self._safe_step(series_photos, lambda: self._open_circle_editor(series_photos, selected, result)))
+
+    def _safe_step(self, series_photos: List[Path], step: Callable[[], None]) -> None:
+        """Runs a GUI step scheduled via `after`; any exception here would otherwise be
+        swallowed silently (no console in the packaged EXE) and leave the app stuck
+        forever on this series, so we always surface it and free up the app again."""
+        try:
+            step()
+        except Exception as exc:
+            self._handle_processing_error(series_photos, f"Unerwarteter Fehler: {exc}")
 
     def _handle_processing_error(self, series_photos: List[Path], message: str) -> None:
         self._log_message(f"Fehler: {message}")
@@ -143,7 +159,7 @@ class MainWindow(tk.Tk):
         CircleCropEditor(
             self,
             image,
-            on_confirm=lambda cropped: self._export_result(series_photos, cropped),
+            on_confirm=lambda cropped: self._safe_step(series_photos, lambda: self._export_result(series_photos, cropped)),
             on_cancel=lambda: self._finish_series(series_photos, None),
         )
 
