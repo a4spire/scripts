@@ -152,18 +152,29 @@ andere Auswahl bleibt per Klick, Zifferntaste oder Pfeiltasten möglich.
 
 ### Automatische Bestätigung per Zeitlimit
 
-Unter **Einstellungen → Automatische Bestätigung per Zeitlimit** lässt sich
-ein Countdown aktivieren: Läuft er ab, wird die zu diesem Zeitpunkt markierte
-Auswahl automatisch bestätigt (Standard: das vorausgewählte, best bewertete
-Foto, sofern nicht manuell umgestellt). Der Countdown wird im Dialog sichtbar
-angezeigt und läuft unabhängig von Benutzerinteraktionen weiter – er wird
-durch Klicks oder Pfeiltasten nicht zurückgesetzt.
+Zwei unabhängige Zeitlimits, jeweils unter **Einstellungen**, nach demselben
+Prinzip:
 
-Ist das Zeitlimit auf **0 Sekunden** gesetzt, wird gar kein Auswahldialog mehr
-angezeigt: Das best bewertete Foto wird sofort automatisch übernommen, sobald
-eine Serie erkannt wird. Das hat Vorrang vor allen anderen automatischen
-Modi (Einzelfoto-Auto-Übernahme, eindeutige Auswahl nach Aussortierung) und
-eignet sich für einen vollautomatischen Batch-Betrieb ohne jede Rückfrage.
+- **Auswahl-Zeitlimit (Fotoauswahl)**: Läuft der Countdown im
+  Foto-Auswahldialog ab, wird die zu diesem Zeitpunkt markierte Auswahl
+  automatisch bestätigt (Standard: das vorausgewählte, best bewertete Foto,
+  sofern nicht manuell umgestellt).
+- **Auswahl-Zeitlimit (Kreisausschnitt)**: Läuft der Countdown im
+  Kreis-Editor ab, wird der zu diesem Zeitpunkt eingestellte Kreisausschnitt
+  automatisch bestätigt (Standard: die Vorpositionierung per
+  Gesichtserkennung, sofern nicht manuell verschoben/skaliert).
+
+Bei beiden wird der Countdown sichtbar angezeigt und läuft unabhängig von
+Benutzerinteraktionen weiter – er wird durch Klicks, Ziehen oder
+Pfeiltasten nicht zurückgesetzt.
+
+Ist eines der beiden Zeitlimits auf **0 Sekunden** gesetzt, wird der
+jeweilige Dialog gar nicht erst angezeigt: Die Vorauswahl (best bewertetes
+Foto bzw. Gesichtserkennungs-Kreis) wird sofort automatisch übernommen.
+Beim Auswahl-Zeitlimit hat das Vorrang vor allen anderen automatischen
+Modi (Einzelfoto-Auto-Übernahme, eindeutige Auswahl nach Aussortierung).
+Werden beide Zeitlimits auf 0 gesetzt, läuft eine Serie komplett ohne
+Rückfrage durch – geeignet für einen vollautomatischen Batch-Betrieb.
 
 ### Installation
 

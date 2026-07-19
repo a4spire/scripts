@@ -17,6 +17,7 @@ from ..exif_utils import get_photo_timestamp
 from ..processing.background_removal import is_model_cached, remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
+from ..processing.face_detection import auto_crop_circle
 from ..processing.quality_check import pick_best_photo, split_by_quality
 from ..series_builder import SeriesBuilder
 from ..watcher import FolderWatcher
@@ -249,11 +250,25 @@ class MainWindow(tk.Tk):
         self._finish_series(series_photos, None)
 
     def _open_circle_editor(self, series_photos: List[Path], selected: Path, image: Image.Image) -> None:
+        if self.config_obj.enable_circle_crop_timeout and self.config_obj.circle_crop_timeout_seconds <= 0:
+            try:
+                cropped = auto_crop_circle(image)
+            except Exception as exc:
+                self._handle_processing_error(series_photos, f"Automatischer Kreisausschnitt fehlgeschlagen: {exc}")
+                return
+            self._log_message("Kreisausschnitt-Zeitlimit auf 0 gesetzt -- Ausschnitt sofort automatisch übernommen.")
+            self._safe_step(series_photos, lambda: self._export_result(series_photos, cropped))
+            return
+
+        circle_timeout = (
+            self.config_obj.circle_crop_timeout_seconds if self.config_obj.enable_circle_crop_timeout else None
+        )
         CircleCropEditor(
             self,
             image,
             on_confirm=lambda cropped: self._safe_step(series_photos, lambda: self._export_result(series_photos, cropped)),
             on_cancel=lambda: self._finish_series(series_photos, None),
+            timeout_seconds=circle_timeout,
         )
 
     def _export_result(self, series_photos: List[Path], cropped: Image.Image) -> None:

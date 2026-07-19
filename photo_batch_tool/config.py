@@ -35,6 +35,8 @@ class Config:
     auto_confirm_unambiguous_selection: bool = False
     enable_selection_timeout: bool = False
     selection_timeout_seconds: int = 10
+    enable_circle_crop_timeout: bool = False
+    circle_crop_timeout_seconds: int = 10
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Config":

@@ -36,6 +36,10 @@ class CircleCropEditor(tk.Toplevel):
     the mouse wheel or the slider -- a live preview shows the resulting
     circular cutout. The radius is automatically clamped so it can never
     extend past the image edges.
+
+    If `timeout_seconds` is given, a visible countdown confirms whatever
+    circle is currently set once it reaches zero -- the countdown does not
+    reset on user interaction, it always fires when it elapses.
     """
 
     def __init__(
@@ -44,6 +48,7 @@ class CircleCropEditor(tk.Toplevel):
         image: Image.Image,
         on_confirm: Callable[[Image.Image], None],
         on_cancel: Optional[Callable[[], None]] = None,
+        timeout_seconds: Optional[int] = None,
     ):
         super().__init__(master)
         self.title("Kreisausschnitt festlegen")
@@ -56,6 +61,8 @@ class CircleCropEditor(tk.Toplevel):
         self._on_cancel = on_cancel
         self._dragging = False
         self._resizing = False
+        self._remaining_seconds = timeout_seconds
+        self._tick_after_id: Optional[str] = None
 
         self._scale = min(1.0, MAX_DISPLAY / max(self._source.width, self._source.height))
         self._display_size = (
@@ -115,6 +122,10 @@ class CircleCropEditor(tk.Toplevel):
             pady=(4, 10)
         )
 
+        if self._remaining_seconds is not None:
+            self._countdown_var = tk.StringVar()
+            tk.Label(side, textvariable=self._countdown_var, fg="#555555").pack(pady=(0, 4))
+
         button_row = tk.Frame(side)
         button_row.pack(pady=(10, 0))
         tk.Button(button_row, text="Bestätigen", command=self._confirm).pack(side="left", padx=4)
@@ -129,6 +140,9 @@ class CircleCropEditor(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self._cancel)
 
         self._redraw()
+
+        if self._remaining_seconds is not None:
+            self._tick()
 
     def _max_possible_radius(self) -> float:
         return max(10.0, min(self._source.width, self._source.height) / 2)
@@ -230,17 +244,32 @@ class CircleCropEditor(tk.Toplevel):
         self._preview_photo = ImageTk.PhotoImage(checker)
         self._preview_label.config(image=self._preview_photo)
 
+    def _tick(self) -> None:
+        self._countdown_var.set(f"Automatische Bestätigung in {self._remaining_seconds} Sekunde(n) ...")
+        if self._remaining_seconds <= 0:
+            self._confirm()
+            return
+        self._remaining_seconds -= 1
+        self._tick_after_id = self.after(1000, self._tick)
+
+    def _cancel_pending_tick(self) -> None:
+        if self._tick_after_id is not None:
+            self.after_cancel(self._tick_after_id)
+            self._tick_after_id = None
+
     def _confirm(self) -> None:
         try:
             cropped = apply_circular_crop(self._source, tuple(self._center), self._radius)
         except Exception as exc:
             self._status_var.set(str(exc))
             return
+        self._cancel_pending_tick()
         self.grab_release()
         self.destroy()
         self._on_confirm(cropped)
 
     def _cancel(self) -> None:
+        self._cancel_pending_tick()
         self.grab_release()
         self.destroy()
         if self._on_cancel:
