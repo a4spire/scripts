@@ -139,6 +139,7 @@ class SeriesSelectorDialog(tk.Toplevel):
     def _select(self, index: int) -> None:
         self._selected_index = index
         self._update_highlight()
+        self._cancel_pending_tick(manual_edit=True)
 
     def _update_highlight(self) -> None:
         for i, frame in enumerate(self._frames):
@@ -155,10 +156,17 @@ class SeriesSelectorDialog(tk.Toplevel):
         self._remaining_seconds -= 1
         self._tick_after_id = self.after(1000, self._tick)
 
-    def _confirm(self, index: int) -> None:
+    def _cancel_pending_tick(self, manual_edit: bool = False) -> None:
         if self._tick_after_id is not None:
             self.after_cancel(self._tick_after_id)
             self._tick_after_id = None
+            if manual_edit:
+                # Abort, don't just pause: once the user has manually picked a photo,
+                # the countdown must not come back and override that choice later.
+                self._countdown_var.set("Automatische Bestätigung abgebrochen (manuell ausgewählt).")
+
+    def _confirm(self, index: int) -> None:
+        self._cancel_pending_tick()
         selected = self._photos[index]
         self.grab_release()
         self.destroy()

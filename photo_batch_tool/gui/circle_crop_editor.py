@@ -177,6 +177,7 @@ class CircleCropEditor(tk.Toplevel):
 
     def _on_drag(self, event) -> None:
         if self._resizing:
+            self._cancel_pending_tick(manual_edit=True)
             cx, cy = self._to_image_coords(event.x, event.y)
             self._radius = max(5.0, ((cx - self._center[0]) ** 2 + (cy - self._center[1]) ** 2) ** 0.5)
             self._clamp_center_and_radius()
@@ -186,6 +187,7 @@ class CircleCropEditor(tk.Toplevel):
 
         if not self._dragging:
             return
+        self._cancel_pending_tick(manual_edit=True)
         cx, cy = self._to_image_coords(event.x, event.y)
         self._center = [
             min(max(cx, 0), self._source.width),
@@ -208,12 +210,14 @@ class CircleCropEditor(tk.Toplevel):
         self._adjust_radius(10 if event.delta > 0 else -10)
 
     def _adjust_radius(self, delta_display_px: float) -> None:
+        self._cancel_pending_tick(manual_edit=True)
         self._radius = max(5.0, self._radius + delta_display_px / self._scale)
         self._clamp_center_and_radius()
         self._radius_var.set(self._radius)
         self._redraw()
 
     def _on_radius_slider(self, value: str) -> None:
+        self._cancel_pending_tick(manual_edit=True)
         self._radius = float(value)
         self._clamp_center_and_radius()
         self._redraw()
@@ -252,10 +256,14 @@ class CircleCropEditor(tk.Toplevel):
         self._remaining_seconds -= 1
         self._tick_after_id = self.after(1000, self._tick)
 
-    def _cancel_pending_tick(self) -> None:
+    def _cancel_pending_tick(self, manual_edit: bool = False) -> None:
         if self._tick_after_id is not None:
             self.after_cancel(self._tick_after_id)
             self._tick_after_id = None
+            if manual_edit:
+                # Abort, don't just pause: once the user has manually moved/resized
+                # the circle, the countdown must not come back and override that later.
+                self._countdown_var.set("Automatische Bestätigung abgebrochen (manuell bearbeitet).")
 
     def _confirm(self) -> None:
         try:

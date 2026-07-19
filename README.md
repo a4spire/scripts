@@ -213,9 +213,12 @@ Prinzip:
   automatisch bestätigt (Standard: die Vorpositionierung per
   Gesichtserkennung, sofern nicht manuell verschoben/skaliert).
 
-Bei beiden wird der Countdown sichtbar angezeigt und läuft unabhängig von
-Benutzerinteraktionen weiter – er wird durch Klicks, Ziehen oder
-Pfeiltasten nicht zurückgesetzt.
+Bei beiden wird der Countdown sichtbar angezeigt. Sobald manuell eingegriffen
+wird – ein anderes Foto per Klick/Pfeiltasten ausgewählt, oder der Kreis per
+Ziehen, Ziehpunkt, Mausrad oder Schieberegler verändert – wird der Countdown
+endgültig abgebrochen (nicht nur pausiert oder zurückgesetzt): Ab diesem
+Zeitpunkt ist die manuelle Eingabe maßgeblich, und nur noch die
+Bestätigen-Aktion (Button, Enter, Doppelklick) schließt den Dialog ab.
 
 Ist eines der beiden Zeitlimits auf **0 Sekunden** gesetzt, wird der
 jeweilige Dialog gar nicht erst angezeigt: Die Vorauswahl (best bewertetes
