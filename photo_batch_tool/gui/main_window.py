@@ -29,6 +29,23 @@ _MODEL_DOWNLOAD_TIMEOUT_SECONDS = 300
 _PROCESSING_TIMEOUT_SECONDS = 90
 
 
+def _unique_destination(directory: Path, filename: str) -> Path:
+    """Appends a counter suffix if `filename` already exists in `directory`,
+    so moving a photo there never silently overwrites an unrelated file --
+    this matters once multiple series can share the same folder (the
+    per-date "_aussortiert" folder)."""
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+    stem, suffix = Path(filename).stem, Path(filename).suffix
+    counter = 1
+    while True:
+        candidate = directory / f"{stem}_{counter}{suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -263,14 +280,20 @@ class MainWindow(tk.Tk):
         done_root = Path(self.config_obj.done_folder)
         folder_name = series_id or datetime.now().strftime("%Y%m%d_%H%M%S")
         subfolder = done_root / folder_name
-        reject_subfolder = done_root / "aussortiert" / folder_name
+
+        # Aussortierte Fotos werden bewusst NICHT pro Serie getrennt, sondern
+        # nur nach Datum gruppiert, damit an einem Tag aussortierte Fotos aus
+        # mehreren Serien in einem gemeinsamen Ordner landen statt in vielen
+        # einzelnen Serien-Unterordnern.
+        date_part = folder_name.split("_")[0]
+        reject_subfolder = done_root / "_aussortiert" / date_part
         excluded_set = set(self._current_excluded_low_quality)
 
         for photo in series_photos:
             target_dir = reject_subfolder if photo in excluded_set else subfolder
             target_dir.mkdir(parents=True, exist_ok=True)
             try:
-                shutil.move(str(photo), str(target_dir / photo.name))
+                shutil.move(str(photo), str(_unique_destination(target_dir, photo.name)))
             except OSError as exc:
                 self._log_message(f"Konnte {photo.name} nicht verschieben: {exc}")
 

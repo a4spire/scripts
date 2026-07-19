@@ -107,11 +107,14 @@ Qualitätsprüfung**:
   zeigen im Auswahldialog eine Warnung mit den erkannten Gründen.
 - **Automatisch aussortieren**: betroffene Fotos werden gar nicht erst zur
   Auswahl angezeigt und landen nach Abschluss der Serie automatisch in
-  `<Erledigt-Ordner>\aussortiert\<Serien-Zeitstempel>\` – nicht gelöscht,
-  sondern nur aus dem Weg geräumt, damit sie sich bei Bedarf wiederfinden
-  lassen. Sollte eine ganze Serie ausschließlich aus solchen Fotos bestehen,
-  werden trotzdem alle zur Auswahl angezeigt (mit Warnung), damit immer eine
-  Wahl möglich bleibt.
+  `<Erledigt-Ordner>\_aussortiert\<Datum>\` – nicht gelöscht, sondern nur aus
+  dem Weg geräumt, damit sie sich bei Bedarf wiederfinden lassen. Bewusst
+  **nicht** pro Serie getrennt: Aussortierte Fotos aus mehreren Serien am
+  gleichen Tag landen in einem gemeinsamen Tagesordner statt in vielen
+  einzelnen Serien-Unterordnern (bei gleichnamigen Dateien wird automatisch
+  eine Zahl angehängt, damit nichts überschrieben wird). Sollte eine ganze
+  Serie ausschließlich aus solchen Fotos bestehen, werden trotzdem alle zur
+  Auswahl angezeigt (mit Warnung), damit immer eine Wahl möglich bleibt.
 
 Schwellenwerte (Schärfe, Mindest-/Maximalhelligkeit) sind ebenfalls in den
 Einstellungen justierbar; die Funktion lässt sich auch komplett abschalten.
