@@ -25,6 +25,9 @@ class SettingsDialog(tk.Toplevel):
         self._dpi_var = tk.StringVar(value=str(config.target_dpi))
         self._size_var = tk.StringVar(value=str(config.target_size_mm))
         self._auto_var = tk.BooleanVar(value=config.auto_accept_single)
+        self._similarity_enabled_var = tk.BooleanVar(value=config.enable_similarity_grouping)
+        self._similarity_threshold_var = tk.StringVar(value=str(config.similarity_hamming_threshold))
+        self._similarity_extra_var = tk.StringVar(value=str(config.similarity_max_extra_seconds))
 
         self._add_folder_row("Überwachungsordner", self._watch_var, 0)
         self._add_folder_row("Ausgabeordner", self._output_var, 1)
@@ -45,8 +48,24 @@ class SettingsDialog(tk.Toplevel):
             self, text="Einzelfoto-Serien automatisch übernehmen (keine Rückfrage)", variable=self._auto_var
         ).grid(row=6, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 0))
 
+        tk.Checkbutton(
+            self,
+            text="Ähnliche Fotos trotz größerem Zeitabstand zur selben Serie zählen (Bildvergleich)",
+            variable=self._similarity_enabled_var,
+        ).grid(row=7, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 0))
+
+        tk.Label(self, text="Ähnlichkeits-Schwellenwert (0 = identisch, höher = toleranter)").grid(
+            row=8, column=0, sticky="w", padx=10
+        )
+        tk.Entry(self, textvariable=self._similarity_threshold_var, width=10).grid(row=8, column=1, sticky="w")
+
+        tk.Label(self, text="Zusätzliche Zeit für Ähnlichkeitserkennung (Sekunden)").grid(
+            row=9, column=0, sticky="w", padx=10
+        )
+        tk.Entry(self, textvariable=self._similarity_extra_var, width=10).grid(row=9, column=1, sticky="w")
+
         button_row = tk.Frame(self)
-        button_row.grid(row=7, column=0, columnspan=3, pady=15)
+        button_row.grid(row=10, column=0, columnspan=3, pady=15)
         tk.Button(button_row, text="Speichern", command=self._save).pack(side="left", padx=5)
         tk.Button(button_row, text="Abbrechen", command=self.destroy).pack(side="left", padx=5)
 
@@ -65,12 +84,15 @@ class SettingsDialog(tk.Toplevel):
             window = int(self._window_var.get())
             dpi = int(self._dpi_var.get())
             size_mm = float(self._size_var.get())
-            if window <= 0 or dpi <= 0 or size_mm <= 0:
+            similarity_threshold = int(self._similarity_threshold_var.get())
+            similarity_extra = int(self._similarity_extra_var.get())
+            if window <= 0 or dpi <= 0 or size_mm <= 0 or similarity_threshold < 0 or similarity_extra < 0:
                 raise ValueError
         except ValueError:
             messagebox.showerror(
                 "Ungültige Eingabe",
-                "Bitte gültige positive Zahlenwerte für Zeitfenster, DPI und Zielgröße eingeben.",
+                "Bitte gültige Zahlenwerte eingeben (Zeitfenster, DPI und Zielgröße positiv; "
+                "Ähnlichkeits-Schwellenwert und Zusatzzeit nicht negativ).",
                 parent=self,
             )
             return
@@ -86,6 +108,9 @@ class SettingsDialog(tk.Toplevel):
         self._config.target_dpi = dpi
         self._config.target_size_mm = size_mm
         self._config.auto_accept_single = self._auto_var.get()
+        self._config.enable_similarity_grouping = self._similarity_enabled_var.get()
+        self._config.similarity_hamming_threshold = similarity_threshold
+        self._config.similarity_max_extra_seconds = similarity_extra
 
         self._on_save(self._config)
         self.destroy()

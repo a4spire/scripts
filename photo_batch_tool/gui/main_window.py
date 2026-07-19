@@ -82,6 +82,9 @@ class MainWindow(tk.Tk):
         self._series_builder = SeriesBuilder(
             window_seconds=self.config_obj.time_window_seconds,
             on_series_ready=self._on_series_ready,
+            enable_similarity_grouping=self.config_obj.enable_similarity_grouping,
+            similarity_hamming_threshold=self.config_obj.similarity_hamming_threshold,
+            similarity_max_extra_seconds=self.config_obj.similarity_max_extra_seconds,
         )
         self._watcher = FolderWatcher(watch_folder, self._series_builder.add_photo)
         self._watcher.start()

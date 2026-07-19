@@ -38,6 +38,29 @@ Alle Ordner, das Zeitfenster, die Ziel-DPI und die Zielgröße sind über den
 Button **Einstellungen** in der GUI konfigurierbar und werden in
 `%APPDATA%\PhotoBatchTool\config.json` gespeichert.
 
+### Serienerkennung per Bildvergleich (bei größerem Zeitabstand)
+
+Ein zu großer Zeitabstand reißt eine Serie normalerweise auseinander, auch
+wenn die Fotos eigentlich zusammengehören (z.B. weil zwischen zwei Aufnahmen
+eine Pause war). Ist **„Ähnliche Fotos trotz größerem Zeitabstand zur
+selben Serie zählen"** aktiviert (Standard: an), vergleicht das Programm
+in diesem Fall zusätzlich zwei aufeinanderfolgende Fotos per
+Bild-Fingerabdruck (Differenz-Hash): Sind sie sich eindeutig sehr ähnlich,
+zählen sie trotzdem zur selben Serie – aber nur bis zu einer zusätzlichen
+Zeitspanne über das normale Zeitfenster hinaus (Standard: 240 Sekunden),
+damit tatsächlich unabhängige Fotos nicht versehentlich zusammengelegt
+werden.
+
+Zwei Einstellungen dazu:
+
+- **Ähnlichkeits-Schwellenwert** (Standard 8, Skala 0–64): wie streng der
+  Vergleich ist. 0 = nur bei praktisch identischen Bildern; höhere Werte
+  erlauben mehr Unterschied (z.B. leicht andere Belichtung/Rahmung) und
+  erhöhen damit auch das Risiko falscher Zusammenlegungen.
+- **Zusätzliche Zeit für Ähnlichkeitserkennung (Sekunden)**: wie weit über
+  das normale Zeitfenster hinaus die Ähnlichkeitsprüfung überhaupt greifen
+  darf.
+
 ### Installation
 
 Voraussetzung: Python 3.10+ für Windows (von python.org, enthält Tkinter).
@@ -96,6 +119,7 @@ photo_batch_tool/
   config.py                    Konfiguration (Laden/Speichern als JSON)
   exif_utils.py                EXIF-Zeitstempel auslesen
   series_builder.py            Gruppierung neuer Fotos zu Serien
+  image_similarity.py          Bild-Fingerabdruck (dHash) für Ähnlichkeitsvergleich
   watcher.py                   Ordnerüberwachung (watchdog)
   processing/
     background_removal.py      rembg-Anbindung

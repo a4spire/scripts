@@ -23,6 +23,9 @@ class Config:
     target_dpi: int = 300
     target_size_mm: float = 19.0
     auto_accept_single: bool = False
+    enable_similarity_grouping: bool = True
+    similarity_hamming_threshold: int = 8
+    similarity_max_extra_seconds: int = 240
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Config":
