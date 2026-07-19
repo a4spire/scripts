@@ -2,3 +2,7 @@ Pillow>=10.0.0
 watchdog>=4.0.0
 rembg>=2.0.57
 onnxruntime>=1.17.0
+# Pinned below 5.0: opencv-python-headless 5.x dropped the bundled Haar
+# cascade XML data files our face detection relies on (verified against the
+# installed package -- 4.11.0.86 ships them under cv2/data/, 5.0.0.93 does not).
+opencv-python-headless>=4.8.0,<5

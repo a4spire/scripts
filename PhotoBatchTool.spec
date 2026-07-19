@@ -1,25 +1,16 @@
 # PyInstaller spec for the Photo Batch Tool.
 # Build with:  pyinstaller PhotoBatchTool.spec
-from pathlib import Path
-
 from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
 hiddenimports = []
 
-for pkg in ("rembg", "onnxruntime"):
+for pkg in ("rembg", "onnxruntime", "cv2"):
     pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(pkg)
     datas += pkg_datas
     binaries += pkg_binaries
     hiddenimports += pkg_hiddenimports
-
-# Bundle the U2Net model if the build environment has already fetched it
-# (see .github/workflows/build-windows-exe.yml), so end users never need
-# their own internet access for the first-run model download.
-_bundled_model = Path("models/u2net.onnx")
-if _bundled_model.exists():
-    datas += [(str(_bundled_model), "models")]
 
 a = Analysis(
     ["main.py"],

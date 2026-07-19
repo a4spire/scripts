@@ -6,6 +6,7 @@ from typing import Callable, Optional, Tuple
 from PIL import Image, ImageTk
 
 from ..processing.circle_crop import apply_circular_crop, max_radius_for_center
+from ..processing.face_detection import compute_default_circle, detect_faces
 
 MAX_DISPLAY = 640
 CHECKER_SIZE = 16
@@ -63,8 +64,10 @@ class CircleCropEditor(tk.Toplevel):
         checker.paste(preview_base, (0, 0), preview_base)
         self._base_photo = ImageTk.PhotoImage(checker)
 
-        self._center = [self._source.width / 2, self._source.height / 2]
-        self._radius = min(self._source.width, self._source.height) / 4
+        faces = detect_faces(self._source)
+        default_center, default_radius = compute_default_circle(self._source.size, faces)
+        self._center = list(default_center)
+        self._radius = default_radius
 
         main = tk.Frame(self)
         main.pack(padx=10, pady=10)

@@ -30,16 +30,6 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: U2Net-Modell für den Bundle herunterladen
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path models | Out-Null
-          Invoke-WebRequest -Uri "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx" -OutFile "models/u2net.onnx"
-          $hash = (Get-FileHash -Algorithm MD5 -Path "models/u2net.onnx").Hash.ToLower()
-          if ($hash -ne "60024c5c889badc19c04ad937298a77b") {
-            throw "u2net.onnx Prüfsumme stimmt nicht überein: $hash"
-          }
-
       - name: EXE mit PyInstaller bauen
         run: pyinstaller PhotoBatchTool.spec
 

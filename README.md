@@ -21,10 +21,13 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
    wird.
 2. **Hintergrund entfernen** – das ausgewählte Foto wird mit `rembg`
    freigestellt (transparenter Hintergrund).
-3. **Interaktiver Kreis-Ausschnitt** – im Vorschaufenster lässt sich ein
-   Kreis per Maus verschieben und der Radius per Mausrad oder Schieberegler
-   anpassen, mit Live-Vorschau des Ergebnisses. Der Radius wird automatisch
-   auf die Bildgrenzen begrenzt.
+3. **Interaktiver Kreis-Ausschnitt** – der Kreis wird per Gesichtserkennung
+   automatisch vorpositioniert: Zentrum in der Mitte aller erkannten Köpfe,
+   Radius so groß, dass alle Köpfe mit kleinem Rand hineinpassen (werden
+   keine Gesichter erkannt, startet der Kreis mittig im Bild). Im
+   Vorschaufenster lässt sich der Kreis per Maus verschieben und der Radius
+   per Mausrad oder Schieberegler anpassen, mit Live-Vorschau des Ergebnisses.
+   Der Radius wird automatisch auf die Bildgrenzen begrenzt.
 4. **Zuschneiden** – nach Bestätigung wird kreisrund zugeschnitten, alles
    außerhalb des Kreises wird transparent.
 5. **Skalierung** – der Ausschnitt wird auf exakt die konfigurierte
@@ -61,6 +64,19 @@ Zwei Einstellungen dazu:
   das normale Zeitfenster hinaus die Ähnlichkeitsprüfung überhaupt greifen
   darf.
 
+### Gesichtserkennung für die Kreis-Vorpositionierung
+
+Die Standardposition des Kreises im Kreis-Editor wird per Gesichtserkennung
+(OpenCV, Haar-Cascade-Klassifikatoren für Frontal- und Profilgesichter)
+bestimmt – ganz ohne Modell-Download, die Klassifikatoren sind im
+`opencv-python-headless`-Paket selbst enthalten. Erkennt das Programm ein
+oder mehrere Gesichter, wird das Zentrum auf die Mitte aller erkannten
+Köpfe gelegt und der Radius so gewählt, dass alle Köpfe plus ein kleiner
+Rand (15 %) hineinpassen. Ohne erkanntes Gesicht (z.B. bei Rückenansicht,
+ungewöhnlichem Winkel oder Nicht-Personen-Fotos) startet der Kreis wie
+zuvor mittig im Bild. Das ist immer nur ein Startwert – der Kreis lässt
+sich danach frei verschieben und in der Größe anpassen.
+
 ### Installation
 
 Voraussetzung: Python 3.10+ für Windows (von python.org, enthält Tkinter).
@@ -93,7 +109,8 @@ Die fertige `PhotoBatchTool.exe` liegt danach in `dist\`. Hinweise:
   (False Positive) – ggf. Ausnahme hinzufügen.
 - Das rembg-Modell wird nicht in die EXE eingebettet, sondern beim ersten
   Start heruntergeladen und lokal zwischengespeichert
-  (`%USERPROFILE%\.u2net`).
+  (`%USERPROFILE%\.u2net`). Siehe Abschnitt "Fehlerbehebung" unten für
+  Details zum Download-Mechanismus.
 
 ### Fertige .exe ohne eigenen Build herunterladen
 
@@ -122,7 +139,8 @@ photo_batch_tool/
   image_similarity.py          Bild-Fingerabdruck (dHash) für Ähnlichkeitsvergleich
   watcher.py                   Ordnerüberwachung (watchdog)
   processing/
-    background_removal.py      rembg-Anbindung
+    background_removal.py      rembg-Anbindung + eigener Modell-Download (Timeout/Retry)
+    face_detection.py           Gesichtserkennung (OpenCV) für Kreis-Vorpositionierung
     circle_crop.py              Kreisförmiger Zuschnitt
     export.py                   Skalierung + PNG-Export mit DPI-Metadaten
     errors.py                   Fehlerklassen (kein Objekt erkannt, Radius zu groß, ...)
@@ -137,53 +155,40 @@ photo_batch_tool/
 
 - Erste `rembg`-Ausführung ist langsam (Modell-Download/-Ladezeit).
 - Unterstützte Bildformate: JPEG, PNG, TIFF, BMP.
+- Die Gesichtserkennung ist ein Best-Effort-Startwert (Haar-Cascade-Verfahren):
+  funktioniert gut bei einigermaßen frontal/seitlich sichtbaren Gesichtern,
+  kann bei ungünstigen Winkeln, starker Verdeckung oder sehr kleinen Gesichtern
+  auch mal nichts finden – dann startet der Kreis mittig im Bild.
 
-### Modell wird beim Build eingebettet (keine Internetverbindung beim Endnutzer nötig)
+### Modell-Download: eigener Mechanismus mit Timeout und Wiederholung
 
-Der GitHub-Actions-Workflow lädt das U2Net-Modell (~170 MB) bereits während
-des Windows-Builds herunter (der Build-Runner hat garantiert Internetzugang)
-und bettet es in die `.exe` ein. Beim ersten Start kopiert das Programm das
-eingebettete Modell automatisch nach `%USERPROFILE%\.u2net\u2net.onnx` – der
-Endnutzer-Rechner braucht dafür **keine eigene Internetverbindung mehr**.
-Das gilt nur für die per GitHub Actions gebaute `.exe` aus diesem Repo, nicht
-für einen manuellen `pyinstaller`-Build ohne den Modell-Download-Schritt aus
-der Workflow-Datei.
+Das Programm lädt das rembg-U2Net-Modell (~170 MB) beim ersten Bedarf selbst
+herunter, statt sich auf rembg's eingebauten Downloader zu verlassen (der hat
+kein Timeout und kann bei einer Firewall, die Verbindungen still fallen lässt
+statt sie abzulehnen, unbegrenzt hängen bleiben). Der eigene Download:
+
+- läuft mit einem Timeout von 20 Sekunden pro Versuch, bis zu 3 Versuche mit
+  kurzer Pause dazwischen (Fehlschlag also spätestens nach ca. 1 Minute klar
+  erkennbar, nicht nach mehreren Minuten stillem Warten),
+- schreibt zunächst in eine temporäre Datei und verschiebt sie erst nach
+  erfolgreicher Prüfsummen-Kontrolle (MD5) an den Zielpfad – ein Abbruch
+  mitten im Download (Absturz, Kill, Stromausfall) kann daher nie eine
+  kaputte/halbe Datei am erwarteten Ort hinterlassen; beim nächsten Start
+  wird einfach sauber neu heruntergeladen,
+- lädt von `https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx`
+  nach `%USERPROFILE%\.u2net\u2net.onnx` (Speicherort und URL direkt aus dem
+  rembg-Quellcode verifiziert, nicht geraten).
 
 ### Fehlerbehebung: Hintergrundentfernung hängt / reagiert nicht
 
-Falls trotzdem keine Reaktion kommt (z.B. bei `python main.py` aus dem
-Quellcode ohne eingebettetes Modell, oder wenn der Build ohne den
-Modell-Download-Schritt lief): `rembg` versucht dann beim allerersten Aufruf,
-das Modell selbst herunterzuladen, von
+Scheitert der Download nach den 3 Versuchen, meldet das Programm einen
+klaren Fehler statt zu hängen. Mögliche Ursachen und Abhilfen:
 
-```
-https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx
-```
-
-und legt es lokal ab unter:
-
-```
-%USERPROFILE%\.u2net\u2net.onnx
-```
-
-Ist diese Datei noch nicht vorhanden (oder unvollständig/0 Byte), scheitert
-der Download meist an fehlendem Internet oder einer Firewall/einem Proxy,
-die die Verbindung nicht ablehnen, sondern einfach hängen lassen. Das
-Programm bricht die Hintergrundentfernung nach spätestens 5 Minuten
-(erster Lauf) bzw. 90 Sekunden (danach, wenn das Modell schon lokal liegt)
-mit einer Fehlermeldung ab – bis dahin kann es aber wie ein Einfrieren
-wirken.
-
-**Abhilfe:**
-
-1. Die offizielle, per GitHub Actions gebaute `.exe` verwenden (siehe oben) –
-   die braucht gar keinen eigenen Download mehr.
-2. Falls doch ein eigener Download nötig ist: prüfen, ob der Rechner
-   grundsätzlich Internetzugang hat (z.B. eine beliebige Webseite im Browser
-   öffnen). Falls nicht: Netzwerk/Firewall des Test-Rechners prüfen bzw. mit
-   der IT-Abteilung klären, dass ausgehende HTTPS-Verbindungen zu
-   `github.com` erlaubt sind.
-3. **Ohne Internet auf dem Zielrechner:** Die Datei `u2net.onnx` (~170 MB,
-   z.B. von einem anderen Rechner mit funktionierendem Internet oder direkt
-   über obige URL) manuell nach `%USERPROFILE%\.u2net\u2net.onnx` kopieren –
-   danach braucht `rembg` keine Internetverbindung mehr.
+1. Prüfen, ob der Rechner grundsätzlich Internetzugang hat (z.B. eine
+   beliebige Webseite im Browser öffnen). Falls nicht: Netzwerk/Firewall
+   des Test-Rechners prüfen bzw. mit der IT-Abteilung klären, dass
+   ausgehende HTTPS-Verbindungen zu `github.com` erlaubt sind.
+2. **Ohne Internet auf dem Zielrechner:** Die Datei `u2net.onnx` (~170 MB,
+   z.B. von einem anderen Rechner mit funktionierendem Internet, oder
+   direkt über obige URL) manuell nach `%USERPROFILE%\.u2net\u2net.onnx`
+   kopieren – danach ist kein eigener Download mehr nötig.

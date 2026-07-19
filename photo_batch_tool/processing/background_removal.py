@@ -1,14 +1,25 @@
 from __future__ import annotations
 
+import hashlib
 import io
-import shutil
-import sys
+import os
+import tempfile
+import time
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image
 
 from .errors import BackgroundRemovalError, NoObjectDetectedError
+
+# Verified directly from the installed rembg source (U2netSession.download_models(),
+# BaseSession.u2net_home()) -- not guessed.
+_MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
+_MODEL_MD5 = "60024c5c889badc19c04ad937298a77b"
+_DOWNLOAD_TIMEOUT_SECONDS = 20
+_DOWNLOAD_MAX_ATTEMPTS = 3
+_DOWNLOAD_RETRY_DELAY_SECONDS = 3
 
 
 def default_model_path() -> Path:
@@ -21,30 +32,70 @@ def is_model_cached() -> bool:
     return default_model_path().exists()
 
 
-def _bundled_model_path() -> Optional[Path]:
-    """The Windows build (see .github/workflows/build-windows-exe.yml) downloads
-    u2net.onnx into models/ before packaging, so PyInstaller ships it inside the
-    EXE. Running from source without that download step, there is no bundled
-    copy -- rembg then falls back to its normal first-run network download."""
-    if getattr(sys, "frozen", False):
-        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    else:
-        base = Path(__file__).resolve().parent.parent.parent
-    candidate = base / "models" / "u2net.onnx"
-    return candidate if candidate.is_file() else None
+def _md5sum(path: Path) -> str:
+    digest = hashlib.md5()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _download_model_once(target: Path) -> None:
+    """Downloads to a temp file in the same directory first and only moves
+    it to the real target path (an atomic rename on the same filesystem)
+    once the checksum has been verified. A crash, timeout, or kill signal
+    mid-download can therefore never leave a corrupted/partial file at the
+    path rembg expects -- only the .part file is affected, and that is
+    always cleaned up."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix="u2net_", suffix=".part")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as tmp_file:
+            with urllib.request.urlopen(_MODEL_URL, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as response:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    tmp_file.write(chunk)
+
+        if _md5sum(tmp_path) != _MODEL_MD5:
+            raise BackgroundRemovalError("Heruntergeladenes Modell hat eine falsche Prüfsumme.")
+
+        tmp_path.replace(target)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 def ensure_model_available() -> None:
-    """Copies the bundled model into rembg's expected cache location on first
-    use, so end users never need their own internet access for it."""
+    """Ensures rembg's U2Net model is present at its expected cache path.
+
+    We download it ourselves instead of relying solely on rembg's internal
+    downloader: that one has no timeout and can hang indefinitely if a
+    firewall silently drops the connection instead of refusing it. Our own
+    attempts are bounded (20s each, up to 3 tries), so a genuine network
+    problem surfaces as a clear error within about a minute instead of
+    looking like a frozen app."""
     if is_model_cached():
         return
-    bundled = _bundled_model_path()
-    if bundled is None:
-        return
+
     target = default_model_path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(bundled, target)
+    last_error: Optional[Exception] = None
+    for attempt in range(1, _DOWNLOAD_MAX_ATTEMPTS + 1):
+        try:
+            _download_model_once(target)
+            return
+        except Exception as exc:
+            last_error = exc
+            if attempt < _DOWNLOAD_MAX_ATTEMPTS:
+                time.sleep(_DOWNLOAD_RETRY_DELAY_SECONDS)
+
+    raise BackgroundRemovalError(
+        f"Das rembg-KI-Modell konnte nach {_DOWNLOAD_MAX_ATTEMPTS} Versuchen nicht "
+        f"heruntergeladen werden ({last_error}). Bitte Internetverbindung/Firewall prüfen "
+        f"oder die Datei manuell nach {target} kopieren (siehe README, Abschnitt "
+        "'Fehlerbehebung: Hintergrundentfernung hängt / reagiert nicht')."
+    )
 
 
 def remove_background(path: Path) -> Image.Image:
