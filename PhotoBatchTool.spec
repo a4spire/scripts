@@ -6,7 +6,7 @@ datas = []
 binaries = []
 hiddenimports = []
 
-for pkg in ("rembg", "onnxruntime", "cv2"):
+for pkg in ("rembg", "onnxruntime", "cv2", "tkinterdnd2"):
     pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(pkg)
     datas += pkg_datas
     binaries += pkg_binaries

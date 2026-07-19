@@ -223,6 +223,31 @@ rembg-KI-Modell heruntergeladen werden (siehe unten), was mehrere Minuten
 dauern kann. Das 20-Sekunden-Ziel gilt für den Normalbetrieb mit bereits
 vorhandenem Modell.
 
+### Drag & Drop für die Batch-Verarbeitung
+
+Im Hauptfenster gibt es ein Ablagefeld ("Fotos oder Ordner hierher ziehen für
+Batch-Verarbeitung"); Drag & Drop funktioniert aber auf dem gesamten
+Fenster, nicht nur auf dem Feld selbst. Man kann:
+
+- einzelne Fotos,
+- mehrere Fotos gleichzeitig, oder
+- einen ganzen Ordner (z.B. den kompletten Inhalt einer Speicherkarte,
+  inklusive Unterordnern)
+
+hineinziehen. Alle enthaltenen, unterstützten Bilddateien werden **als
+Kopie** in den Überwachungsordner übernommen (die Originaldateien bleiben
+unangetastet, egal woher sie stammen) und durchlaufen danach exakt denselben
+Prozess wie normal per Ordnerüberwachung ankommende Fotos: Serienerkennung,
+Auswahl, Hintergrundentfernung, Kreisausschnitt, Export und Verschieben nach
+Erledigt. Läuft die Überwachung noch nicht, wird sie durch das Ablegen
+automatisch gestartet.
+
+Voraussetzung ist das Paket `tkinterdnd2` (in `requirements.txt` enthalten
+und in der PyInstaller-.exe mitgebaut). Fehlt es zur Laufzeit, wird das
+Ablagefeld entsprechend beschriftet und im Protokoll ein Hinweis ausgegeben
+– der Rest der Anwendung (inkl. normaler Ordnerüberwachung) funktioniert
+davon unabhängig weiter.
+
 ### Installation
 
 Voraussetzung: Python 3.10+ für Windows (von python.org, enthält Tkinter).

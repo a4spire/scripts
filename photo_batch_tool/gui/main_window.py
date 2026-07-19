@@ -21,14 +21,40 @@ from ..processing.export import scale_and_export
 from ..processing.face_detection import auto_crop_circle
 from ..processing.quality_check import pick_best_photo, split_by_quality
 from ..series_builder import SeriesBuilder
-from ..watcher import FolderWatcher
+from ..watcher import SUPPORTED_EXTENSIONS, FolderWatcher
 from .circle_crop_editor import CircleCropEditor
 from .series_selector import SeriesSelectorDialog
 from .settings_dialog import SettingsDialog
 
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+
+    _DND_AVAILABLE = True
+    _BaseWindow = TkinterDnD.Tk
+except ImportError:  # pragma: no cover - exercised only when the optional dep is missing
+    _DND_AVAILABLE = False
+    DND_FILES = None
+    _BaseWindow = tk.Tk
+
 # First run downloads a ~170 MB model; later runs use the cached copy and should be fast.
 _MODEL_DOWNLOAD_TIMEOUT_SECONDS = 300
 _PROCESSING_TIMEOUT_SECONDS = 90
+
+
+def _collect_dropped_photos(raw_paths: List[str]) -> List[Path]:
+    """Expands a list of drag & drop paths (files and/or folders) into a
+    flat, sorted list of supported image files, recursing into folders so
+    the whole process can be fed by dropping an entire SD-card folder."""
+    collected: List[Path] = []
+    for raw in raw_paths:
+        path = Path(raw)
+        if path.is_dir():
+            collected.extend(
+                f for f in path.rglob("*") if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS
+            )
+        elif path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            collected.append(path)
+    return sorted(set(collected))
 
 
 def _unique_destination(directory: Path, filename: str) -> Path:
@@ -48,12 +74,12 @@ def _unique_destination(directory: Path, filename: str) -> Path:
         counter += 1
 
 
-class MainWindow(tk.Tk):
+class MainWindow(_BaseWindow):
     def __init__(self):
         super().__init__()
         self.title("Foto-Batch-Verarbeitung")
-        self.geometry("620x440")
-        self.minsize(560, 360)
+        self.geometry("620x480")
+        self.minsize(560, 380)
 
         self.config_obj = Config.load(DEFAULT_CONFIG_PATH)
         self._watcher: Optional[FolderWatcher] = None
@@ -65,6 +91,7 @@ class MainWindow(tk.Tk):
         self._current_series_started_at: Optional[float] = None
 
         self._build_ui()
+        self._setup_drop_target()
         self.after(150, self._poll_queue)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -79,6 +106,22 @@ class MainWindow(tk.Tk):
         self._status_var = tk.StringVar(value="Gestoppt")
         tk.Label(self, textvariable=self._status_var, anchor="w").pack(fill="x", padx=10)
 
+        drop_text = (
+            "Fotos oder Ordner hierher ziehen für Batch-Verarbeitung"
+            if _DND_AVAILABLE
+            else "Drag & Drop nicht verfügbar (tkinterdnd2 fehlt) -- Fotos direkt in den Überwachungsordner legen"
+        )
+        self._drop_zone = tk.Label(
+            self,
+            text=drop_text,
+            relief="ridge",
+            borderwidth=2,
+            bg="#f0f0f0",
+            fg="#333333",
+            pady=12,
+        )
+        self._drop_zone.pack(fill="x", padx=10, pady=(8, 0))
+
         tk.Label(self, text="Protokoll:").pack(anchor="w", padx=10, pady=(10, 0))
         log_frame = tk.Frame(self)
         log_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
@@ -92,6 +135,38 @@ class MainWindow(tk.Tk):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self._log.insert("end", f"[{timestamp}] {message}")
         self._log.see("end")
+
+    def _setup_drop_target(self) -> None:
+        if not _DND_AVAILABLE:
+            self._log_message(
+                "Hinweis: Drag & Drop ist deaktiviert (Paket 'tkinterdnd2' nicht installiert)."
+            )
+            return
+        for widget in (self, self._drop_zone):
+            widget.drop_target_register(DND_FILES)
+            widget.dnd_bind("<<Drop>>", self._on_drop)
+
+    def _on_drop(self, event) -> None:
+        raw_paths = self.tk.splitlist(event.data)
+        photos = _collect_dropped_photos(raw_paths)
+        if not photos:
+            self._log_message("Drag & Drop: keine unterstützten Bilddateien in der Ablage gefunden.")
+            return
+
+        if not self._watching:
+            self._start_watch()
+
+        watch_folder = Path(self.config_obj.watch_folder)
+        copied = 0
+        for src in photos:
+            try:
+                shutil.copy2(str(src), str(_unique_destination(watch_folder, src.name)))
+                copied += 1
+            except OSError as exc:
+                self._log_message(f"Drag & Drop: {src.name} konnte nicht kopiert werden: {exc}")
+        self._log_message(
+            f"Drag & Drop: {copied} Foto(s) in den Überwachungsordner übernommen -- Originaldateien bleiben unverändert."
+        )
 
     def _toggle_watch(self) -> None:
         if self._watching:
