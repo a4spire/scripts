@@ -176,3 +176,24 @@ def split_by_quality(
         excluded = []
 
     return selectable, excluded, assessments
+
+
+def _rank_key(assessment: Optional[QualityAssessment]) -> Tuple[int, float, float]:
+    """Higher is better. Compares meaningfully only within one series (same
+    subject/composition) -- blur_score is not a calibrated absolute measure,
+    but ranking a handful of shots of the same scene against each other
+    works well enough to pick a reasonable default. Order of priority:
+    unflagged beats flagged, then sharper wins, then better-exposed wins."""
+    if assessment is None:
+        return (0, 1e9, 0.0)
+    tier = 0 if not assessment.is_low_quality else -1
+    blur = assessment.blur_score if assessment.blur_score != float("inf") else 1e9
+    brightness_closeness = -abs(assessment.brightness - 128.0)
+    return (tier, blur, brightness_closeness)
+
+
+def pick_best_photo(photos: List[Path], assessments: Dict[Path, QualityAssessment]) -> Path:
+    """Picks which photo to preselect in the series-selector gallery. Falls
+    back to the first photo (today's previous default) when there is no
+    quality data to rank by, e.g. quality filtering is disabled."""
+    return max(photos, key=lambda p: _rank_key(assessments.get(p)))

@@ -17,7 +17,7 @@ from ..exif_utils import get_photo_timestamp
 from ..processing.background_removal import is_model_cached, remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
-from ..processing.quality_check import split_by_quality
+from ..processing.quality_check import pick_best_photo, split_by_quality
 from ..series_builder import SeriesBuilder
 from ..watcher import FolderWatcher
 from .circle_crop_editor import CircleCropEditor
@@ -134,6 +134,14 @@ class MainWindow(tk.Tk):
             self.config_obj.quality_max_brightness,
         )
 
+        if self.config_obj.enable_selection_timeout and self.config_obj.selection_timeout_seconds <= 0:
+            best = pick_best_photo(selectable, assessments)
+            self._log_message(
+                f"Auswahl-Zeitlimit auf 0 gesetzt -- {best.name} wird sofort automatisch übernommen."
+            )
+            self._start_processing(photos, best, excluded)
+            return
+
         if len(photos) == 1 and self.config_obj.auto_accept_single:
             assessment = assessments.get(photos[0])
             if assessment is None or not assessment.is_low_quality:
@@ -158,12 +166,16 @@ class MainWindow(tk.Tk):
                 self._start_processing(photos, sole_candidate, excluded)
                 return
 
+        timeout_seconds = (
+            self.config_obj.selection_timeout_seconds if self.config_obj.enable_selection_timeout else None
+        )
         SeriesSelectorDialog(
             self,
             selectable,
             excluded,
             assessments,
             on_confirm=lambda selected, exc: self._start_processing(photos, selected, exc),
+            timeout_seconds=timeout_seconds,
         )
 
     def _start_processing(self, series_photos: List[Path], selected: Path, excluded_low_quality: List[Path]) -> None:

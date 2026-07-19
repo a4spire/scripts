@@ -37,6 +37,8 @@ class SettingsDialog(tk.Toplevel):
         self._quality_min_bright_var = tk.StringVar(value=str(config.quality_min_brightness))
         self._quality_max_bright_var = tk.StringVar(value=str(config.quality_max_brightness))
         self._auto_confirm_var = tk.BooleanVar(value=config.auto_confirm_unambiguous_selection)
+        self._selection_timeout_enabled_var = tk.BooleanVar(value=config.enable_selection_timeout)
+        self._selection_timeout_var = tk.StringVar(value=str(config.selection_timeout_seconds))
 
         folders = tk.LabelFrame(self, text="Ordner")
         folders.pack(fill="x", padx=10, pady=(10, 5))
@@ -123,6 +125,20 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         ).grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=(2, 6))
 
+        timeout = tk.LabelFrame(self, text="Automatische Bestätigung per Zeitlimit")
+        timeout.pack(fill="x", padx=10, pady=5)
+        tk.Checkbutton(
+            timeout,
+            text="Auswahl nach Zeitlimit automatisch bestätigen (best bewertetes Foto ist vorausgewählt)",
+            variable=self._selection_timeout_enabled_var,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
+        tk.Label(timeout, text="Zeitlimit in Sekunden (0 = sofort anwenden, kein Dialog)").grid(
+            row=1, column=0, sticky="w", padx=10, pady=(0, 6)
+        )
+        tk.Entry(timeout, textvariable=self._selection_timeout_var, width=10).grid(
+            row=1, column=1, sticky="w", pady=(0, 6)
+        )
+
         self._error_var = tk.StringVar(value="")
         tk.Label(self, textvariable=self._error_var, fg="#b00020", wraplength=420, justify="left").pack(
             padx=10, pady=(4, 0)
@@ -156,6 +172,7 @@ class SettingsDialog(tk.Toplevel):
             quality_blur = float(self._quality_blur_var.get())
             quality_min_bright = float(self._quality_min_bright_var.get())
             quality_max_bright = float(self._quality_max_bright_var.get())
+            selection_timeout = int(self._selection_timeout_var.get())
             if (
                 window <= 0
                 or dpi <= 0
@@ -166,13 +183,14 @@ class SettingsDialog(tk.Toplevel):
                 or not (0 <= quality_min_bright <= 255)
                 or not (0 <= quality_max_bright <= 255)
                 or quality_min_bright >= quality_max_bright
+                or selection_timeout < 0
             ):
                 raise ValueError
         except ValueError:
             self._error_var.set(
                 "Bitte gültige Zahlenwerte eingeben (Zeitfenster, DPI und Zielgröße positiv; "
-                "Ähnlichkeits-Schwellenwert und Zusatzzeit nicht negativ; Helligkeitswerte 0-255 "
-                "mit Minimum < Maximum)."
+                "Ähnlichkeits-Schwellenwert, Zusatzzeit und Zeitlimit nicht negativ; Helligkeitswerte "
+                "0-255 mit Minimum < Maximum)."
             )
             return
 
@@ -198,6 +216,8 @@ class SettingsDialog(tk.Toplevel):
         self._config.quality_min_brightness = quality_min_bright
         self._config.quality_max_brightness = quality_max_bright
         self._config.auto_confirm_unambiguous_selection = self._auto_confirm_var.get()
+        self._config.enable_selection_timeout = self._selection_timeout_enabled_var.get()
+        self._config.selection_timeout_seconds = selection_timeout
 
         self._on_save(self._config)
         self.destroy()

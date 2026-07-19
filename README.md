@@ -13,12 +13,15 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
 1. **Ordnerüberwachung** – ein konfigurierter Eingangsordner wird laufend
    überwacht (`watchdog`). Neue Fotos werden anhand ihres EXIF-Zeitstempels
    zu Serien gebündelt (Standard-Zeitfenster: 60 Sekunden). Für jede Serie
-   öffnet sich ein Auswahldialog mit Miniaturansichten; Auswahl per Klick,
-   Zifferntaste (1–9) oder Pfeiltasten + Enter. Einzelfoto-Serien werden
-   ebenfalls kurz bestätigt, sofern nicht "Automatisch übernehmen" aktiviert
-   ist. Nach Verarbeitung wandert die komplette Serie in den
-   Erledigt-Ordner (Unterordner je Serie), damit nichts doppelt verarbeitet
-   wird.
+   öffnet sich ein Auswahldialog mit Miniaturansichten; das best bewertete
+   Foto (siehe Qualitätsprüfung) ist bereits vorausgewählt. Auswahl per
+   Klick, Zifferntaste (1–9) oder Pfeiltasten + Enter. Einzelfoto-Serien
+   werden ebenfalls kurz bestätigt, sofern nicht "Automatisch übernehmen"
+   aktiviert ist. Nach Verarbeitung wandert die **komplette** Serie
+   (ausgewähltes Foto, nicht gewählte Fotos und ggf. aussortierte Fotos) aus
+   dem Überwachungsordner in den Erledigt-Ordner (Unterordner je Serie),
+   damit nichts doppelt verarbeitet wird und keine Restbestände im
+   Überwachungsordner liegen bleiben.
 2. **Hintergrund entfernen** – das ausgewählte Foto wird mit `rembg`
    freigestellt (transparenter Hintergrund).
 3. **Interaktiver Kreis-Ausschnitt** – der Kreis wird per Gesichtserkennung
@@ -130,6 +133,34 @@ nur aus einem einzigen Foto besteht, fragt weiterhin kurz nach, sofern
 dieses Foto Qualitätsprobleme zeigt oder die separate Option dafür nicht
 aktiviert ist – "eindeutig" bedeutet hier ausdrücklich "durch Aussortieren
 eindeutig geworden", nicht "es gab ohnehin nur eins".
+
+### Vorauswahl des best bewerteten Fotos
+
+Im Auswahldialog ist immer automatisch das nach Qualitätskriterien am besten
+bewertete Foto der Serie markiert (nicht nur bei aktivierter Qualitätsfilterung
+mit "Automatisch aussortieren", sondern auch im Standardmodus "Nur
+markieren"). Bewertet wird – nur innerhalb derselben Serie, nicht als
+absoluter Vergleichswert – zuerst danach, ob ein Foto überhaupt als
+qualitativ auffällig markiert wurde (unauffällige Fotos gewinnen immer),
+dann nach Schärfe, dann nach Belichtungsnähe zu einem neutralen Mittelton.
+Ist die Qualitätsprüfung deaktiviert, bleibt es beim bisherigen Verhalten
+(erstes Foto der Serie vorausgewählt). Das ist immer nur ein Vorschlag – jede
+andere Auswahl bleibt per Klick, Zifferntaste oder Pfeiltasten möglich.
+
+### Automatische Bestätigung per Zeitlimit
+
+Unter **Einstellungen → Automatische Bestätigung per Zeitlimit** lässt sich
+ein Countdown aktivieren: Läuft er ab, wird die zu diesem Zeitpunkt markierte
+Auswahl automatisch bestätigt (Standard: das vorausgewählte, best bewertete
+Foto, sofern nicht manuell umgestellt). Der Countdown wird im Dialog sichtbar
+angezeigt und läuft unabhängig von Benutzerinteraktionen weiter – er wird
+durch Klicks oder Pfeiltasten nicht zurückgesetzt.
+
+Ist das Zeitlimit auf **0 Sekunden** gesetzt, wird gar kein Auswahldialog mehr
+angezeigt: Das best bewertete Foto wird sofort automatisch übernommen, sobald
+eine Serie erkannt wird. Das hat Vorrang vor allen anderen automatischen
+Modi (Einzelfoto-Auto-Übernahme, eindeutige Auswahl nach Aussortierung) und
+eignet sich für einen vollautomatischen Batch-Betrieb ohne jede Rückfrage.
 
 ### Installation
 

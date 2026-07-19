@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import tkinter as tk
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from PIL import Image, ImageTk
 
-from ..processing.quality_check import QualityAssessment
+from ..processing.quality_check import QualityAssessment, pick_best_photo
 
 THUMB_SIZE = (220, 220)
 COLOR_SELECTED = "#3a7bd5"
@@ -18,10 +18,11 @@ class SeriesSelectorDialog(tk.Toplevel):
     """Shows the selectable photos of one detected series and lets the user
     pick one.
 
-    Selection can happen by mouse click, by number keys 1-9, by arrow keys
-    plus Enter, or by double-click. Single-photo series still go through this
-    dialog (unless auto-accept is enabled elsewhere), satisfying the
-    requirement that nothing gets silently skipped.
+    The best-rated photo (see `quality_check.pick_best_photo`) is preselected
+    automatically. Selection can happen by mouse click, by number keys 1-9,
+    by arrow keys plus Enter, or by double-click. Single-photo series still
+    go through this dialog (unless auto-accept is enabled elsewhere),
+    satisfying the requirement that nothing gets silently skipped.
 
     `photos` is the already-filtered gallery to display (quality-based
     exclusion, if any, has already happened in the caller via
@@ -29,6 +30,10 @@ class SeriesSelectorDialog(tk.Toplevel):
     passed through only for bookkeeping and for showing warnings on
     photos that stayed selectable despite a flagged quality issue
     ("warn" mode).
+
+    If `timeout_seconds` is given, a visible countdown confirms whatever is
+    currently selected once it reaches zero -- the countdown does not reset
+    on user interaction, it always fires when it elapses.
     """
 
     def __init__(
@@ -38,6 +43,7 @@ class SeriesSelectorDialog(tk.Toplevel):
         excluded: List[Path],
         assessments: Dict[Path, QualityAssessment],
         on_confirm: Callable[[Path, List[Path]], None],
+        timeout_seconds: Optional[int] = None,
     ):
         super().__init__(master)
         self.title("Foto für Serie auswählen")
@@ -48,9 +54,12 @@ class SeriesSelectorDialog(tk.Toplevel):
         self._photos = photos
         self._excluded = excluded
         self._on_confirm = on_confirm
-        self._selected_index = 0
+        best_photo = pick_best_photo(photos, assessments)
+        self._selected_index = photos.index(best_photo)
         self._thumb_images: List[ImageTk.PhotoImage] = []
         self._frames: List[tk.Frame] = []
+        self._remaining_seconds = timeout_seconds
+        self._tick_after_id: Optional[str] = None
 
         info_parts = [
             f"{len(photos)} Foto(s) in dieser Serie erkannt."
@@ -62,7 +71,8 @@ class SeriesSelectorDialog(tk.Toplevel):
         tk.Label(self, text=" ".join(info_parts), font=("Segoe UI", 11, "bold")).pack(pady=(10, 4))
         tk.Label(
             self,
-            text="Auswahl per Klick, Zifferntaste (1-9) oder Pfeiltasten + Enter. Doppelklick bestätigt sofort.",
+            text="Auswahl per Klick, Zifferntaste (1-9) oder Pfeiltasten + Enter. Doppelklick bestätigt sofort. "
+            "Das best bewertete Foto ist bereits vorausgewählt.",
         ).pack(pady=(0, 10))
 
         gallery = tk.Frame(self)
@@ -94,6 +104,10 @@ class SeriesSelectorDialog(tk.Toplevel):
                     justify="center",
                 ).pack()
 
+        if self._remaining_seconds is not None:
+            self._countdown_var = tk.StringVar()
+            tk.Label(self, textvariable=self._countdown_var, fg="#555555").pack(pady=(0, 4))
+
         button_row = tk.Frame(self)
         button_row.pack(pady=(0, 10))
         tk.Button(button_row, text="Verwenden (Enter)", command=self._confirm_selected).pack()
@@ -102,6 +116,9 @@ class SeriesSelectorDialog(tk.Toplevel):
         self._bind_keys()
         self.protocol("WM_DELETE_WINDOW", lambda: None)
         self.focus_set()
+
+        if self._remaining_seconds is not None:
+            self._tick()
 
     def _load_thumbnail(self, photo: Path) -> ImageTk.PhotoImage:
         with Image.open(photo) as image:
@@ -130,7 +147,18 @@ class SeriesSelectorDialog(tk.Toplevel):
     def _confirm_selected(self) -> None:
         self._confirm(self._selected_index)
 
+    def _tick(self) -> None:
+        self._countdown_var.set(f"Automatische Bestätigung in {self._remaining_seconds} Sekunde(n) ...")
+        if self._remaining_seconds <= 0:
+            self._confirm_selected()
+            return
+        self._remaining_seconds -= 1
+        self._tick_after_id = self.after(1000, self._tick)
+
     def _confirm(self, index: int) -> None:
+        if self._tick_after_id is not None:
+            self.after_cancel(self._tick_after_id)
+            self._tick_after_id = None
         selected = self._photos[index]
         self.grab_release()
         self.destroy()

@@ -33,6 +33,8 @@ class Config:
     quality_min_brightness: float = 40.0
     quality_max_brightness: float = 220.0
     auto_confirm_unambiguous_selection: bool = False
+    enable_selection_timeout: bool = False
+    selection_timeout_seconds: int = 10
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Config":
