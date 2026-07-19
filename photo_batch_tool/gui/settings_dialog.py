@@ -11,9 +11,13 @@ class SettingsDialog(tk.Toplevel):
     def __init__(self, master: tk.Misc, config: Config, on_save: Callable[[Config], None]):
         super().__init__(master)
         self.title("Einstellungen")
-        self.resizable(False, False)
+        self.resizable(True, True)
         self.transient(master)
         self.grab_set()
+
+        initial_height = min(640, self.winfo_screenheight() - 100)
+        self.geometry(f"640x{initial_height}")
+        self.minsize(480, 300)
 
         self._config = config
         self._on_save = on_save
@@ -42,7 +46,39 @@ class SettingsDialog(tk.Toplevel):
         self._circle_timeout_enabled_var = tk.BooleanVar(value=config.enable_circle_crop_timeout)
         self._circle_timeout_var = tk.StringVar(value=str(config.circle_crop_timeout_seconds))
 
-        fast_mode = tk.LabelFrame(self, text="Vollautomatischer Schnellmodus")
+        # Fixed footer (error label + Speichern/Abbrechen) is packed first with
+        # side="bottom" so it always stays visible and reserves its space,
+        # regardless of how tall the scrollable content above grows.
+        self._error_var = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._error_var, fg="#b00020", wraplength=460, justify="left").pack(
+            side="bottom", fill="x", padx=10, pady=(4, 4)
+        )
+        button_row = tk.Frame(self)
+        button_row.pack(side="bottom", pady=10)
+        tk.Button(button_row, text="Speichern", command=self._save).pack(side="left", padx=5)
+        tk.Button(button_row, text="Abbrechen", command=self.destroy).pack(side="left", padx=5)
+
+        # Scrollable area for all settings sections, so the dialog stays usable
+        # even when its content is taller than the screen.
+        canvas_area = tk.Frame(self)
+        canvas_area.pack(side="top", fill="both", expand=True)
+        canvas = tk.Canvas(canvas_area, highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_area, orient="vertical", command=canvas.yview)
+        content = tk.Frame(canvas)
+        content.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        content_window = canvas.create_window((0, 0), window=content, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(content_window, width=e.width))
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def _on_mousewheel(event: tk.Event) -> None:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        canvas.bind("<Enter>", lambda e: canvas.bind_all("<MouseWheel>", _on_mousewheel))
+        canvas.bind("<Leave>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        fast_mode = tk.LabelFrame(content, text="Vollautomatischer Schnellmodus")
         fast_mode.pack(fill="x", padx=10, pady=(10, 5))
         tk.Label(
             fast_mode,
@@ -59,13 +95,13 @@ class SettingsDialog(tk.Toplevel):
             row=1, column=0, sticky="w", padx=10, pady=(0, 8)
         )
 
-        folders = tk.LabelFrame(self, text="Ordner")
+        folders = tk.LabelFrame(content, text="Ordner")
         folders.pack(fill="x", padx=10, pady=(10, 5))
         self._add_folder_row(folders, "Überwachungsordner", self._watch_var, 0)
         self._add_folder_row(folders, "Ausgabeordner", self._output_var, 1)
         self._add_folder_row(folders, "Erledigt-Ordner", self._done_var, 2)
 
-        processing = tk.LabelFrame(self, text="Verarbeitung")
+        processing = tk.LabelFrame(content, text="Verarbeitung")
         processing.pack(fill="x", padx=10, pady=5)
         tk.Label(processing, text="Zeitfenster Serienerkennung (Sekunden)").grid(
             row=0, column=0, sticky="w", padx=10, pady=(6, 0)
@@ -86,7 +122,7 @@ class SettingsDialog(tk.Toplevel):
             processing, text="Kundennamen beim Export abfragen", variable=self._ask_customer_name_var
         ).grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
 
-        similarity = tk.LabelFrame(self, text="Serienerkennung per Bildähnlichkeit")
+        similarity = tk.LabelFrame(content, text="Serienerkennung per Bildähnlichkeit")
         similarity.pack(fill="x", padx=10, pady=5)
         tk.Checkbutton(
             similarity,
@@ -106,7 +142,7 @@ class SettingsDialog(tk.Toplevel):
             row=2, column=1, sticky="w", pady=(0, 6)
         )
 
-        quality = tk.LabelFrame(self, text="Automatische Qualitätsprüfung (Unschärfe, Belichtung, Augen/Gesicht)")
+        quality = tk.LabelFrame(content, text="Automatische Qualitätsprüfung (Unschärfe, Belichtung, Augen/Gesicht)")
         quality.pack(fill="x", padx=10, pady=5)
         tk.Checkbutton(
             quality, text="Fotos automatisch auf Qualitätsprobleme prüfen", variable=self._quality_enabled_var
@@ -144,7 +180,7 @@ class SettingsDialog(tk.Toplevel):
             justify="left",
         ).grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=(2, 6))
 
-        timeout = tk.LabelFrame(self, text="Auswahl-Zeitlimit (Fotoauswahl)")
+        timeout = tk.LabelFrame(content, text="Auswahl-Zeitlimit (Fotoauswahl)")
         timeout.pack(fill="x", padx=10, pady=5)
         tk.Checkbutton(
             timeout,
@@ -158,7 +194,7 @@ class SettingsDialog(tk.Toplevel):
             row=1, column=1, sticky="w", pady=(0, 6)
         )
 
-        circle_timeout = tk.LabelFrame(self, text="Auswahl-Zeitlimit (Kreisausschnitt)")
+        circle_timeout = tk.LabelFrame(content, text="Auswahl-Zeitlimit (Kreisausschnitt)")
         circle_timeout.pack(fill="x", padx=10, pady=5)
         tk.Checkbutton(
             circle_timeout,
@@ -173,16 +209,6 @@ class SettingsDialog(tk.Toplevel):
         tk.Entry(circle_timeout, textvariable=self._circle_timeout_var, width=10).grid(
             row=1, column=1, sticky="w", pady=(0, 6)
         )
-
-        self._error_var = tk.StringVar(value="")
-        tk.Label(self, textvariable=self._error_var, fg="#b00020", wraplength=420, justify="left").pack(
-            padx=10, pady=(4, 0)
-        )
-
-        button_row = tk.Frame(self)
-        button_row.pack(pady=15)
-        tk.Button(button_row, text="Speichern", command=self._save).pack(side="left", padx=5)
-        tk.Button(button_row, text="Abbrechen", command=self.destroy).pack(side="left", padx=5)
 
     def _apply_fast_mode(self) -> None:
         self._window_var.set("10")

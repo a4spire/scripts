@@ -44,7 +44,10 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
 
 Alle Ordner, das Zeitfenster, die Ziel-DPI und die Zielgröße sind über den
 Button **Einstellungen** in der GUI konfigurierbar und werden in
-`%APPDATA%\PhotoBatchTool\config.json` gespeichert.
+`%APPDATA%\PhotoBatchTool\config.json` gespeichert. Das Einstellungsfenster
+ist frei in der Größe veränderbar (Ziehen am Fensterrand) und scrollt seinen
+Inhalt, falls er nicht auf den Bildschirm passt -- "Speichern" und
+"Abbrechen" bleiben dabei immer sichtbar am unteren Rand.
 
 ### Serienerkennung per Bildvergleich (bei größerem Zeitabstand)
 
