@@ -25,9 +25,10 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
    automatisch vorpositioniert: Zentrum in der Mitte aller erkannten Köpfe,
    Radius so groß, dass alle Köpfe mit kleinem Rand hineinpassen (werden
    keine Gesichter erkannt, startet der Kreis mittig im Bild). Im
-   Vorschaufenster lässt sich der Kreis per Maus verschieben und der Radius
-   per Mausrad oder Schieberegler anpassen, mit Live-Vorschau des Ergebnisses.
-   Der Radius wird automatisch auf die Bildgrenzen begrenzt.
+   Vorschaufenster lässt sich der Kreis per Klick verschieben, per Ziehpunkt
+   am Kreisrand direkt in der Größe anpassen, oder per Mausrad/Schieberegler
+   skalieren – mit Live-Vorschau des Ergebnisses. Der Radius wird automatisch
+   auf die Bildgrenzen begrenzt.
 4. **Zuschneiden** – nach Bestätigung wird kreisrund zugeschnitten, alles
    außerhalb des Kreises wird transparent.
 5. **Skalierung** – der Ausschnitt wird auf exakt die konfigurierte
@@ -35,7 +36,8 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
    300 DPI) skaliert.
 6. **Export** – Speicherung als PNG mit transparentem Hintergrund und
    DPI-Metadaten im Ausgabeordner. Der Dateiname enthält den
-   Serien-Zeitstempel und optional einen Kundennamen.
+   Serien-Zeitstempel und optional einen Kundennamen (die Abfrage danach
+   lässt sich in den Einstellungen abschalten, falls nicht relevant).
 
 Alle Ordner, das Zeitfenster, die Ziel-DPI und die Zielgröße sind über den
 Button **Einstellungen** in der GUI konfigurierbar und werden in
@@ -76,6 +78,45 @@ Rand (15 %) hineinpassen. Ohne erkanntes Gesicht (z.B. bei Rückenansicht,
 ungewöhnlichem Winkel oder Nicht-Personen-Fotos) startet der Kreis wie
 zuvor mittig im Bild. Das ist immer nur ein Startwert – der Kreis lässt
 sich danach frei verschieben und in der Größe anpassen.
+
+### Automatische Qualitätsprüfung (verschwommen, Belichtung, Augen/Gesicht)
+
+Bevor eine Serie zur Auswahl angezeigt wird, prüft das Programm optional
+jedes Foto auf typische Qualitätsprobleme:
+
+- **Verschwommen**: Schärfe-Metrik (Varianz der Laplace-Transformation,
+  ein etabliertes, einfaches Verfahren) – niedriger Wert = unscharf.
+- **Über-/Unterbelichtung**: mittlere Helligkeit außerhalb eines
+  einstellbaren Bereichs (Standard 40–220 auf einer Skala 0–255).
+- **Augen evtl. geschlossen**: Heuristik auf Basis der Gesichtserkennung –
+  wird ein Gesicht erkannt, aber innerhalb des oberen Gesichtsbereichs kein
+  Auge gefunden (OpenCV-Augen-Cascade), gilt das als Hinweis auf
+  geschlossene Augen. Das ist kein zuverlässiger Test (Brille, Seitenwinkel,
+  schlechtes Licht können Augen ebenfalls "verstecken"), sondern nur ein
+  zusätzliches Warnsignal.
+- **Kein Gesicht erkannt**: separat gemeldet, falls für den Anwendungsfall
+  (Kopf-/Porträtfotos) relevant.
+
+Zwei Modi, einstellbar unter **Einstellungen → Automatische
+Qualitätsprüfung**:
+
+- **Nur markieren** (Standard): alle Fotos bleiben auswählbar, betroffene
+  zeigen im Auswahldialog eine Warnung mit den erkannten Gründen.
+- **Automatisch aussortieren**: betroffene Fotos werden gar nicht erst zur
+  Auswahl angezeigt und landen nach Abschluss der Serie automatisch in
+  `<Erledigt-Ordner>\aussortiert\<Serien-Zeitstempel>\` – nicht gelöscht,
+  sondern nur aus dem Weg geräumt, damit sie sich bei Bedarf wiederfinden
+  lassen. Sollte eine ganze Serie ausschließlich aus solchen Fotos bestehen,
+  werden trotzdem alle zur Auswahl angezeigt (mit Warnung), damit immer eine
+  Wahl möglich bleibt.
+
+Schwellenwerte (Schärfe, Mindest-/Maximalhelligkeit) sind ebenfalls in den
+Einstellungen justierbar; die Funktion lässt sich auch komplett abschalten.
+
+**Bewusst nicht automatisch ausgewertet** (zur Transparenz): mehrere
+Gesichter im Bild (kann bei Gruppenfotos legitim sein, keine
+Qualitätsaussage) und sehr niedrige Bildauflösung. Bei Bedarf lässt sich
+das ergänzen.
 
 ### Installation
 
@@ -141,6 +182,7 @@ photo_batch_tool/
   processing/
     background_removal.py      rembg-Anbindung + eigener Modell-Download (Timeout/Retry)
     face_detection.py           Gesichtserkennung (OpenCV) für Kreis-Vorpositionierung
+    quality_check.py            Qualitätsprüfung (Unschärfe, Belichtung, Augen/Gesicht)
     circle_crop.py              Kreisförmiger Zuschnitt
     export.py                   Skalierung + PNG-Export mit DPI-Metadaten
     errors.py                   Fehlerklassen (kein Objekt erkannt, Radius zu groß, ...)
@@ -159,6 +201,9 @@ photo_batch_tool/
   funktioniert gut bei einigermaßen frontal/seitlich sichtbaren Gesichtern,
   kann bei ungünstigen Winkeln, starker Verdeckung oder sehr kleinen Gesichtern
   auch mal nichts finden – dann startet der Kreis mittig im Bild.
+- Die Qualitätsprüfung (insbesondere "Augen evtl. geschlossen") ist eine
+  Heuristik, kein zuverlässiger Test – als Warnsignal gedacht, nicht als
+  Garantie.
 
 ### Modell-Download: eigener Mechanismus mit Timeout und Wiederholung
 

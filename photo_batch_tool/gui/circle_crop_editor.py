@@ -11,6 +11,8 @@ from ..processing.face_detection import compute_default_circle, detect_faces
 MAX_DISPLAY = 640
 CHECKER_SIZE = 16
 PREVIEW_SIZE = 180
+HANDLE_DISPLAY_RADIUS = 6
+HANDLE_HIT_RADIUS = 12
 
 
 def _make_checkerboard(size: Tuple[int, int]) -> Image.Image:
@@ -29,10 +31,11 @@ def _make_checkerboard(size: Tuple[int, int]) -> Image.Image:
 class CircleCropEditor(tk.Toplevel):
     """Interactive circle placement over the background-removed photo.
 
-    The circle can be dragged with the mouse, resized with the mouse wheel
-    or the radius slider, and a live preview shows the resulting circular
-    cutout. The radius is automatically clamped so it can never extend past
-    the image edges.
+    The circle body can be dragged to move it, a handle on its edge can be
+    dragged to resize it directly, and the radius can also be adjusted with
+    the mouse wheel or the slider -- a live preview shows the resulting
+    circular cutout. The radius is automatically clamped so it can never
+    extend past the image edges.
     """
 
     def __init__(
@@ -52,6 +55,7 @@ class CircleCropEditor(tk.Toplevel):
         self._on_confirm = on_confirm
         self._on_cancel = on_cancel
         self._dragging = False
+        self._resizing = False
 
         self._scale = min(1.0, MAX_DISPLAY / max(self._source.width, self._source.height))
         self._display_size = (
@@ -82,6 +86,9 @@ class CircleCropEditor(tk.Toplevel):
         self._canvas.grid(row=0, column=0, padx=(0, 10))
         self._canvas.create_image(0, 0, anchor="nw", image=self._base_photo)
         self._circle_id = self._canvas.create_oval(0, 0, 0, 0, outline="#ff3b30", width=2)
+        self._handle_id = self._canvas.create_oval(
+            0, 0, 0, 0, fill="#ff3b30", outline="#ffffff", width=1
+        )
 
         side = tk.Frame(main)
         side.grid(row=0, column=1, sticky="n")
@@ -89,6 +96,7 @@ class CircleCropEditor(tk.Toplevel):
         self._preview_label = tk.Label(side)
         self._preview_label.pack(pady=(0, 10))
 
+        tk.Label(side, text="Ziehpunkt am Kreisrand zum Anpassen des Radius, oder:").pack()
         tk.Label(side, text="Radius").pack()
         self._radius_var = tk.DoubleVar(value=self._radius)
         self._radius_scale = tk.Scale(
@@ -114,6 +122,7 @@ class CircleCropEditor(tk.Toplevel):
 
         self._canvas.bind("<ButtonPress-1>", self._on_press)
         self._canvas.bind("<B1-Motion>", self._on_drag)
+        self._canvas.bind("<Motion>", self._on_hover)
         self._canvas.bind("<MouseWheel>", self._on_wheel)
         self._canvas.bind("<Button-4>", lambda e: self._adjust_radius(10))
         self._canvas.bind("<Button-5>", lambda e: self._adjust_radius(-10))
@@ -135,12 +144,32 @@ class CircleCropEditor(tk.Toplevel):
     def _to_image_coords(self, x: float, y: float) -> Tuple[float, float]:
         return x / self._scale, y / self._scale
 
+    def _handle_display_position(self) -> Tuple[float, float]:
+        cx, cy = self._center[0] * self._scale, self._center[1] * self._scale
+        r = self._radius * self._scale
+        return cx + r, cy
+
     def _on_press(self, event) -> None:
+        hx, hy = self._handle_display_position()
+        if ((event.x - hx) ** 2 + (event.y - hy) ** 2) ** 0.5 <= HANDLE_HIT_RADIUS:
+            self._resizing = True
+            self._dragging = False
+            return
+
+        self._resizing = False
         cx, cy = self._to_image_coords(event.x, event.y)
         dist = ((cx - self._center[0]) ** 2 + (cy - self._center[1]) ** 2) ** 0.5
         self._dragging = dist <= self._radius
 
     def _on_drag(self, event) -> None:
+        if self._resizing:
+            cx, cy = self._to_image_coords(event.x, event.y)
+            self._radius = max(5.0, ((cx - self._center[0]) ** 2 + (cy - self._center[1]) ** 2) ** 0.5)
+            self._clamp_center_and_radius()
+            self._radius_var.set(self._radius)
+            self._redraw()
+            return
+
         if not self._dragging:
             return
         cx, cy = self._to_image_coords(event.x, event.y)
@@ -150,6 +179,16 @@ class CircleCropEditor(tk.Toplevel):
         ]
         self._clamp_center_and_radius()
         self._redraw()
+
+    def _on_hover(self, event) -> None:
+        if self._dragging or self._resizing:
+            return
+        hx, hy = self._handle_display_position()
+        on_handle = ((event.x - hx) ** 2 + (event.y - hy) ** 2) ** 0.5 <= HANDLE_HIT_RADIUS
+        try:
+            self._canvas.config(cursor="sizing" if on_handle else "")
+        except tk.TclError:
+            pass  # cursor name unsupported on this platform -- purely cosmetic, safe to skip
 
     def _on_wheel(self, event) -> None:
         self._adjust_radius(10 if event.delta > 0 else -10)
@@ -169,6 +208,14 @@ class CircleCropEditor(tk.Toplevel):
         cx, cy = self._center[0] * self._scale, self._center[1] * self._scale
         r = self._radius * self._scale
         self._canvas.coords(self._circle_id, cx - r, cy - r, cx + r, cy + r)
+        hx, hy = self._handle_display_position()
+        self._canvas.coords(
+            self._handle_id,
+            hx - HANDLE_DISPLAY_RADIUS,
+            hy - HANDLE_DISPLAY_RADIUS,
+            hx + HANDLE_DISPLAY_RADIUS,
+            hy + HANDLE_DISPLAY_RADIUS,
+        )
         self._update_preview()
 
     def _update_preview(self) -> None:

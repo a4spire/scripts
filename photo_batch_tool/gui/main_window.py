@@ -17,6 +17,7 @@ from ..exif_utils import get_photo_timestamp
 from ..processing.background_removal import is_model_cached, remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
+from ..processing.quality_check import assess_quality
 from ..series_builder import SeriesBuilder
 from ..watcher import FolderWatcher
 from .circle_crop_editor import CircleCropEditor
@@ -41,6 +42,7 @@ class MainWindow(tk.Tk):
         self._series_queue: "queue.Queue[List[Path]]" = queue.Queue()
         self._dialog_active = False
         self._watching = False
+        self._current_excluded_low_quality: List[Path] = []
 
         self._build_ui()
         self.after(300, self._poll_queue)
@@ -124,11 +126,41 @@ class MainWindow(tk.Tk):
 
     def _present_series(self, photos: List[Path]) -> None:
         if len(photos) == 1 and self.config_obj.auto_accept_single:
-            self._start_processing(photos, photos[0])
+            if self.config_obj.enable_quality_filter:
+                assessment = None
+                try:
+                    with Image.open(photos[0]) as img:
+                        assessment = assess_quality(
+                            img.convert("RGB"),
+                            blur_threshold=self.config_obj.quality_blur_threshold,
+                            min_brightness=self.config_obj.quality_min_brightness,
+                            max_brightness=self.config_obj.quality_max_brightness,
+                        )
+                except Exception:
+                    assessment = None
+                if assessment is not None and assessment.is_low_quality:
+                    self._log_message(
+                        f"Einzelfoto der Serie zeigt mögliche Qualitätsprobleme "
+                        f"({', '.join(assessment.reasons)}) -- zeige trotz Auto-Übernahme zur Bestätigung."
+                    )
+                    SeriesSelectorDialog(
+                        self,
+                        photos,
+                        self.config_obj,
+                        on_confirm=lambda selected, excluded: self._start_processing(photos, selected, excluded),
+                    )
+                    return
+            self._start_processing(photos, photos[0], [])
             return
-        SeriesSelectorDialog(self, photos, on_confirm=lambda selected: self._start_processing(photos, selected))
+        SeriesSelectorDialog(
+            self,
+            photos,
+            self.config_obj,
+            on_confirm=lambda selected, excluded: self._start_processing(photos, selected, excluded),
+        )
 
-    def _start_processing(self, series_photos: List[Path], selected: Path) -> None:
+    def _start_processing(self, series_photos: List[Path], selected: Path, excluded_low_quality: List[Path]) -> None:
+        self._current_excluded_low_quality = excluded_low_quality
         if is_model_cached():
             hint = ""
         else:
@@ -190,7 +222,9 @@ class MainWindow(tk.Tk):
 
     def _export_result(self, series_photos: List[Path], cropped: Image.Image) -> None:
         series_id = get_photo_timestamp(series_photos[0]).strftime("%Y%m%d_%H%M%S")
-        customer = simpledialog.askstring("Kundenname", "Kundenname (optional):", parent=self) or ""
+        customer = ""
+        if self.config_obj.ask_customer_name:
+            customer = simpledialog.askstring("Kundenname", "Kundenname (optional):", parent=self) or ""
         try:
             out_path = scale_and_export(
                 cropped,
@@ -208,14 +242,25 @@ class MainWindow(tk.Tk):
 
     def _finish_series(self, series_photos: List[Path], series_id: Optional[str]) -> None:
         done_root = Path(self.config_obj.done_folder)
-        subfolder = done_root / (series_id or datetime.now().strftime("%Y%m%d_%H%M%S"))
-        subfolder.mkdir(parents=True, exist_ok=True)
+        folder_name = series_id or datetime.now().strftime("%Y%m%d_%H%M%S")
+        subfolder = done_root / folder_name
+        reject_subfolder = done_root / "aussortiert" / folder_name
+        excluded_set = set(self._current_excluded_low_quality)
+
         for photo in series_photos:
+            target_dir = reject_subfolder if photo in excluded_set else subfolder
+            target_dir.mkdir(parents=True, exist_ok=True)
             try:
-                shutil.move(str(photo), str(subfolder / photo.name))
+                shutil.move(str(photo), str(target_dir / photo.name))
             except OSError as exc:
                 self._log_message(f"Konnte {photo.name} nicht verschieben: {exc}")
+
         self._log_message(f"Serie abgeschlossen, verschoben nach {subfolder}")
+        if excluded_set:
+            self._log_message(
+                f"{len(excluded_set)} Foto(s) wegen Qualitätsprüfung nach {reject_subfolder} verschoben"
+            )
+        self._current_excluded_low_quality = []
         self._dialog_active = False
 
     def _open_settings(self) -> None:

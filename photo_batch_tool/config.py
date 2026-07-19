@@ -26,6 +26,12 @@ class Config:
     enable_similarity_grouping: bool = True
     similarity_hamming_threshold: int = 8
     similarity_max_extra_seconds: int = 240
+    ask_customer_name: bool = True
+    enable_quality_filter: bool = True
+    quality_action: str = "warn"  # "warn" (mark, still selectable) or "auto_move" (hide + move to aussortiert)
+    quality_blur_threshold: float = 100.0
+    quality_min_brightness: float = 40.0
+    quality_max_brightness: float = 220.0
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Config":

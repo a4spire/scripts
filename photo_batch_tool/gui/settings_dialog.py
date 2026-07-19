@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, ttk
 from typing import Callable
 
 from ..config import Config
@@ -25,54 +25,112 @@ class SettingsDialog(tk.Toplevel):
         self._dpi_var = tk.StringVar(value=str(config.target_dpi))
         self._size_var = tk.StringVar(value=str(config.target_size_mm))
         self._auto_var = tk.BooleanVar(value=config.auto_accept_single)
+        self._ask_customer_name_var = tk.BooleanVar(value=config.ask_customer_name)
         self._similarity_enabled_var = tk.BooleanVar(value=config.enable_similarity_grouping)
         self._similarity_threshold_var = tk.StringVar(value=str(config.similarity_hamming_threshold))
         self._similarity_extra_var = tk.StringVar(value=str(config.similarity_max_extra_seconds))
-
-        self._add_folder_row("Überwachungsordner", self._watch_var, 0)
-        self._add_folder_row("Ausgabeordner", self._output_var, 1)
-        self._add_folder_row("Erledigt-Ordner", self._done_var, 2)
-
-        tk.Label(self, text="Zeitfenster Serienerkennung (Sekunden)").grid(
-            row=3, column=0, sticky="w", padx=10, pady=(10, 0)
+        self._quality_enabled_var = tk.BooleanVar(value=config.enable_quality_filter)
+        self._quality_action_var = tk.StringVar(
+            value="Nur markieren" if config.quality_action == "warn" else "Automatisch aussortieren"
         )
-        tk.Entry(self, textvariable=self._window_var, width=10).grid(row=3, column=1, sticky="w", pady=(10, 0))
+        self._quality_blur_var = tk.StringVar(value=str(config.quality_blur_threshold))
+        self._quality_min_bright_var = tk.StringVar(value=str(config.quality_min_brightness))
+        self._quality_max_bright_var = tk.StringVar(value=str(config.quality_max_brightness))
 
-        tk.Label(self, text="Ziel-DPI (z.B. 300 für Lasergravur)").grid(row=4, column=0, sticky="w", padx=10)
-        tk.Entry(self, textvariable=self._dpi_var, width=10).grid(row=4, column=1, sticky="w")
+        folders = tk.LabelFrame(self, text="Ordner")
+        folders.pack(fill="x", padx=10, pady=(10, 5))
+        self._add_folder_row(folders, "Überwachungsordner", self._watch_var, 0)
+        self._add_folder_row(folders, "Ausgabeordner", self._output_var, 1)
+        self._add_folder_row(folders, "Erledigt-Ordner", self._done_var, 2)
 
-        tk.Label(self, text="Zielgröße (mm)").grid(row=5, column=0, sticky="w", padx=10)
-        tk.Entry(self, textvariable=self._size_var, width=10).grid(row=5, column=1, sticky="w")
-
+        processing = tk.LabelFrame(self, text="Verarbeitung")
+        processing.pack(fill="x", padx=10, pady=5)
+        tk.Label(processing, text="Zeitfenster Serienerkennung (Sekunden)").grid(
+            row=0, column=0, sticky="w", padx=10, pady=(6, 0)
+        )
+        tk.Entry(processing, textvariable=self._window_var, width=10).grid(
+            row=0, column=1, sticky="w", pady=(6, 0)
+        )
+        tk.Label(processing, text="Ziel-DPI (z.B. 300 für Lasergravur)").grid(
+            row=1, column=0, sticky="w", padx=10
+        )
+        tk.Entry(processing, textvariable=self._dpi_var, width=10).grid(row=1, column=1, sticky="w")
+        tk.Label(processing, text="Zielgröße (mm)").grid(row=2, column=0, sticky="w", padx=10)
+        tk.Entry(processing, textvariable=self._size_var, width=10).grid(row=2, column=1, sticky="w")
         tk.Checkbutton(
-            self, text="Einzelfoto-Serien automatisch übernehmen (keine Rückfrage)", variable=self._auto_var
-        ).grid(row=6, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 0))
-
+            processing, text="Einzelfoto-Serien automatisch übernehmen (keine Rückfrage)", variable=self._auto_var
+        ).grid(row=3, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
         tk.Checkbutton(
-            self,
-            text="Ähnliche Fotos trotz größerem Zeitabstand zur selben Serie zählen (Bildvergleich)",
+            processing, text="Kundennamen beim Export abfragen", variable=self._ask_customer_name_var
+        ).grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
+
+        similarity = tk.LabelFrame(self, text="Serienerkennung per Bildähnlichkeit")
+        similarity.pack(fill="x", padx=10, pady=5)
+        tk.Checkbutton(
+            similarity,
+            text="Ähnliche Fotos trotz größerem Zeitabstand zur selben Serie zählen",
             variable=self._similarity_enabled_var,
-        ).grid(row=7, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 0))
-
-        tk.Label(self, text="Ähnlichkeits-Schwellenwert (0 = identisch, höher = toleranter)").grid(
-            row=8, column=0, sticky="w", padx=10
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
+        tk.Label(similarity, text="Ähnlichkeits-Schwellenwert (0 = identisch, höher = toleranter)").grid(
+            row=1, column=0, sticky="w", padx=10
         )
-        tk.Entry(self, textvariable=self._similarity_threshold_var, width=10).grid(row=8, column=1, sticky="w")
-
-        tk.Label(self, text="Zusätzliche Zeit für Ähnlichkeitserkennung (Sekunden)").grid(
-            row=9, column=0, sticky="w", padx=10
+        tk.Entry(similarity, textvariable=self._similarity_threshold_var, width=10).grid(
+            row=1, column=1, sticky="w"
         )
-        tk.Entry(self, textvariable=self._similarity_extra_var, width=10).grid(row=9, column=1, sticky="w")
+        tk.Label(similarity, text="Zusätzliche Zeit für Ähnlichkeitserkennung (Sekunden)").grid(
+            row=2, column=0, sticky="w", padx=10, pady=(0, 6)
+        )
+        tk.Entry(similarity, textvariable=self._similarity_extra_var, width=10).grid(
+            row=2, column=1, sticky="w", pady=(0, 6)
+        )
+
+        quality = tk.LabelFrame(self, text="Automatische Qualitätsprüfung (Unschärfe, Belichtung, Augen/Gesicht)")
+        quality.pack(fill="x", padx=10, pady=5)
+        tk.Checkbutton(
+            quality, text="Fotos automatisch auf Qualitätsprobleme prüfen", variable=self._quality_enabled_var
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
+        tk.Label(quality, text="Bei Problemen:").grid(row=1, column=0, sticky="w", padx=10)
+        ttk.Combobox(
+            quality,
+            textvariable=self._quality_action_var,
+            values=["Nur markieren", "Automatisch aussortieren"],
+            state="readonly",
+            width=22,
+        ).grid(row=1, column=1, columnspan=2, sticky="w")
+        tk.Label(quality, text="Unschärfe-Schwellenwert (niedriger = strenger)").grid(
+            row=2, column=0, sticky="w", padx=10, pady=(4, 0)
+        )
+        tk.Entry(quality, textvariable=self._quality_blur_var, width=10).grid(
+            row=2, column=1, sticky="w", pady=(4, 0)
+        )
+        tk.Label(quality, text="Mindesthelligkeit (0-255, darunter = zu dunkel)").grid(
+            row=3, column=0, sticky="w", padx=10
+        )
+        tk.Entry(quality, textvariable=self._quality_min_bright_var, width=10).grid(row=3, column=1, sticky="w")
+        tk.Label(quality, text="Maximalhelligkeit (0-255, darüber = zu hell)").grid(
+            row=4, column=0, sticky="w", padx=10, pady=(0, 6)
+        )
+        tk.Entry(quality, textvariable=self._quality_max_bright_var, width=10).grid(
+            row=4, column=1, sticky="w", pady=(0, 6)
+        )
+
+        self._error_var = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._error_var, fg="#b00020", wraplength=420, justify="left").pack(
+            padx=10, pady=(4, 0)
+        )
 
         button_row = tk.Frame(self)
-        button_row.grid(row=10, column=0, columnspan=3, pady=15)
+        button_row.pack(pady=15)
         tk.Button(button_row, text="Speichern", command=self._save).pack(side="left", padx=5)
         tk.Button(button_row, text="Abbrechen", command=self.destroy).pack(side="left", padx=5)
 
-    def _add_folder_row(self, label: str, var: tk.StringVar, row: int) -> None:
-        tk.Label(self, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=4)
-        tk.Entry(self, textvariable=var, width=40).grid(row=row, column=1, padx=4)
-        tk.Button(self, text="...", command=lambda: self._browse(var)).grid(row=row, column=2, padx=(0, 10))
+    def _add_folder_row(self, parent: tk.Misc, label: str, var: tk.StringVar, row: int) -> None:
+        pady = (6, 4) if row == 0 else 4
+        tk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=pady)
+        tk.Entry(parent, textvariable=var, width=40).grid(row=row, column=1, padx=4, pady=pady)
+        tk.Button(parent, text="...", command=lambda: self._browse(var)).grid(
+            row=row, column=2, padx=(0, 10), pady=pady
+        )
 
     def _browse(self, var: tk.StringVar) -> None:
         chosen = filedialog.askdirectory(initialdir=var.get() or ".")
@@ -86,21 +144,34 @@ class SettingsDialog(tk.Toplevel):
             size_mm = float(self._size_var.get())
             similarity_threshold = int(self._similarity_threshold_var.get())
             similarity_extra = int(self._similarity_extra_var.get())
-            if window <= 0 or dpi <= 0 or size_mm <= 0 or similarity_threshold < 0 or similarity_extra < 0:
+            quality_blur = float(self._quality_blur_var.get())
+            quality_min_bright = float(self._quality_min_bright_var.get())
+            quality_max_bright = float(self._quality_max_bright_var.get())
+            if (
+                window <= 0
+                or dpi <= 0
+                or size_mm <= 0
+                or similarity_threshold < 0
+                or similarity_extra < 0
+                or quality_blur < 0
+                or not (0 <= quality_min_bright <= 255)
+                or not (0 <= quality_max_bright <= 255)
+                or quality_min_bright >= quality_max_bright
+            ):
                 raise ValueError
         except ValueError:
-            messagebox.showerror(
-                "Ungültige Eingabe",
+            self._error_var.set(
                 "Bitte gültige Zahlenwerte eingeben (Zeitfenster, DPI und Zielgröße positiv; "
-                "Ähnlichkeits-Schwellenwert und Zusatzzeit nicht negativ).",
-                parent=self,
+                "Ähnlichkeits-Schwellenwert und Zusatzzeit nicht negativ; Helligkeitswerte 0-255 "
+                "mit Minimum < Maximum)."
             )
             return
 
         if not self._watch_var.get().strip() or not self._output_var.get().strip() or not self._done_var.get().strip():
-            messagebox.showerror("Ungültige Eingabe", "Bitte alle drei Ordner angeben.", parent=self)
+            self._error_var.set("Bitte alle drei Ordner angeben.")
             return
 
+        self._error_var.set("")
         self._config.watch_folder = self._watch_var.get().strip()
         self._config.output_folder = self._output_var.get().strip()
         self._config.done_folder = self._done_var.get().strip()
@@ -108,9 +179,15 @@ class SettingsDialog(tk.Toplevel):
         self._config.target_dpi = dpi
         self._config.target_size_mm = size_mm
         self._config.auto_accept_single = self._auto_var.get()
+        self._config.ask_customer_name = self._ask_customer_name_var.get()
         self._config.enable_similarity_grouping = self._similarity_enabled_var.get()
         self._config.similarity_hamming_threshold = similarity_threshold
         self._config.similarity_max_extra_seconds = similarity_extra
+        self._config.enable_quality_filter = self._quality_enabled_var.get()
+        self._config.quality_action = "warn" if self._quality_action_var.get() == "Nur markieren" else "auto_move"
+        self._config.quality_blur_threshold = quality_blur
+        self._config.quality_min_brightness = quality_min_bright
+        self._config.quality_max_brightness = quality_max_bright
 
         self._on_save(self._config)
         self.destroy()
