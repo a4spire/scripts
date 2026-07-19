@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Callable
 
 from ..config import Config
@@ -41,6 +41,23 @@ class SettingsDialog(tk.Toplevel):
         self._selection_timeout_var = tk.StringVar(value=str(config.selection_timeout_seconds))
         self._circle_timeout_enabled_var = tk.BooleanVar(value=config.enable_circle_crop_timeout)
         self._circle_timeout_var = tk.StringVar(value=str(config.circle_crop_timeout_seconds))
+
+        fast_mode = tk.LabelFrame(self, text="Vollautomatischer Schnellmodus")
+        fast_mode.pack(fill="x", padx=10, pady=(10, 5))
+        tk.Label(
+            fast_mode,
+            text=(
+                "Stellt alle Optionen unten so ein, dass eine Serie ohne jede Rückfrage "
+                "erkannt, ausgewählt, zugeschnitten und exportiert wird (Ziel: unter 20 "
+                "Sekunden nach dem letzten Foto der Serie). Vor dem Speichern prüfbar/"
+                "anpassbar. Achtung: deaktiviert die Kundennamen-Abfrage."
+            ),
+            wraplength=460,
+            justify="left",
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=(6, 4))
+        tk.Button(fast_mode, text="Schnellmodus übernehmen", command=self._apply_fast_mode).grid(
+            row=1, column=0, sticky="w", padx=10, pady=(0, 8)
+        )
 
         folders = tk.LabelFrame(self, text="Ordner")
         folders.pack(fill="x", padx=10, pady=(10, 5))
@@ -166,6 +183,23 @@ class SettingsDialog(tk.Toplevel):
         button_row.pack(pady=15)
         tk.Button(button_row, text="Speichern", command=self._save).pack(side="left", padx=5)
         tk.Button(button_row, text="Abbrechen", command=self.destroy).pack(side="left", padx=5)
+
+    def _apply_fast_mode(self) -> None:
+        self._window_var.set("10")
+        self._auto_var.set(True)
+        self._ask_customer_name_var.set(False)
+        self._quality_enabled_var.set(True)
+        self._quality_action_var.set("Automatisch aussortieren")
+        self._auto_confirm_var.set(True)
+        self._selection_timeout_enabled_var.set(True)
+        self._selection_timeout_var.set("0")
+        self._circle_timeout_enabled_var.set(True)
+        self._circle_timeout_var.set("0")
+        messagebox.showinfo(
+            "Schnellmodus übernommen",
+            "Die Felder wurden angepasst. Bitte prüfen und auf 'Speichern' klicken, damit sie wirksam werden.",
+            parent=self,
+        )
 
     def _add_folder_row(self, parent: tk.Misc, label: str, var: tk.StringVar, row: int) -> None:
         pady = (6, 4) if row == 0 else 4

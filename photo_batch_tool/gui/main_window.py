@@ -4,6 +4,7 @@ import concurrent.futures
 import queue
 import shutil
 import threading
+import time
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -57,13 +58,14 @@ class MainWindow(tk.Tk):
         self.config_obj = Config.load(DEFAULT_CONFIG_PATH)
         self._watcher: Optional[FolderWatcher] = None
         self._series_builder: Optional[SeriesBuilder] = None
-        self._series_queue: "queue.Queue[List[Path]]" = queue.Queue()
+        self._series_queue: "queue.Queue[tuple[List[Path], float]]" = queue.Queue()
         self._dialog_active = False
         self._watching = False
         self._current_excluded_low_quality: List[Path] = []
+        self._current_series_started_at: Optional[float] = None
 
         self._build_ui()
-        self.after(300, self._poll_queue)
+        self.after(150, self._poll_queue)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _build_ui(self) -> None:
@@ -126,21 +128,26 @@ class MainWindow(tk.Tk):
         self._status_var.set("Gestoppt")
         self._log_message("Überwachung gestoppt")
 
-    def _on_series_ready(self, photos: List[Path]) -> None:
+    def _on_series_ready(self, photos: List[Path], first_arrival: float) -> None:
         # Called from a watchdog/timer thread; hand off to the Tk main thread.
-        self._series_queue.put(photos)
+        self._series_queue.put((photos, first_arrival))
 
     def _poll_queue(self) -> None:
         if not self._dialog_active:
             try:
-                photos = self._series_queue.get_nowait()
+                photos, first_arrival = self._series_queue.get_nowait()
             except queue.Empty:
                 photos = None
+                first_arrival = None
             if photos:
                 self._dialog_active = True
-                self._log_message(f"Neue Serie erkannt ({len(photos)} Foto(s))")
+                self._current_series_started_at = first_arrival
+                recognition_elapsed = time.monotonic() - first_arrival
+                self._log_message(
+                    f"Neue Serie erkannt ({len(photos)} Foto(s), Erkennung nach {recognition_elapsed:.1f}s)"
+                )
                 self._present_series(photos)
-        self.after(300, self._poll_queue)
+        self.after(150, self._poll_queue)
 
     def _present_series(self, photos: List[Path]) -> None:
         selectable, excluded, assessments = split_by_quality(
@@ -317,7 +324,11 @@ class MainWindow(tk.Tk):
             self._log_message(
                 f"{len(excluded_set)} Foto(s) wegen Qualitätsprüfung nach {reject_subfolder} verschoben"
             )
+        if self._current_series_started_at is not None:
+            total_elapsed = time.monotonic() - self._current_series_started_at
+            self._log_message(f"Gesamtdauer seit Erkennung: {total_elapsed:.1f}s")
         self._current_excluded_low_quality = []
+        self._current_series_started_at = None
         self._dialog_active = False
 
     def _open_settings(self) -> None:

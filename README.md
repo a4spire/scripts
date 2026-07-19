@@ -12,7 +12,7 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
 
 1. **Ordnerüberwachung** – ein konfigurierter Eingangsordner wird laufend
    überwacht (`watchdog`). Neue Fotos werden anhand ihres EXIF-Zeitstempels
-   zu Serien gebündelt (Standard-Zeitfenster: 60 Sekunden). Für jede Serie
+   zu Serien gebündelt (Standard-Zeitfenster: 15 Sekunden). Für jede Serie
    öffnet sich ein Auswahldialog mit Miniaturansichten; das best bewertete
    Foto (siehe Qualitätsprüfung) ist bereits vorausgewählt. Auswahl per
    Klick, Zifferntaste (1–9) oder Pfeiltasten + Enter. Einzelfoto-Serien
@@ -175,6 +175,53 @@ Beim Auswahl-Zeitlimit hat das Vorrang vor allen anderen automatischen
 Modi (Einzelfoto-Auto-Übernahme, eindeutige Auswahl nach Aussortierung).
 Werden beide Zeitlimits auf 0 gesetzt, läuft eine Serie komplett ohne
 Rückfrage durch – geeignet für einen vollautomatischen Batch-Betrieb.
+
+### Vollautomatischer Schnellmodus (Erkennung + Verarbeitung unter 20 Sekunden)
+
+In den Einstellungen übernimmt der Button **"Schnellmodus übernehmen"**
+(oben in der Einstellungen-Übersicht) mit einem Klick eine Kombination aus
+bereits vorhandenen Optionen, die eine Serie komplett ohne Rückfrage
+verarbeitet:
+
+- Zeitfenster Serienerkennung auf 10 Sekunden
+- Einzelfoto-Serien automatisch übernehmen: an
+- Kundennamen-Abfrage beim Export: aus (eine offene Modal-Abfrage würde die
+  Verarbeitung sonst anhalten, bis jemand etwas eintippt)
+- Automatische Qualitätsprüfung an, Modus "Automatisch aussortieren"
+- Bei eindeutiger Auswahl automatisch bestätigen: an
+- Beide Zeitlimits (Fotoauswahl, Kreisausschnitt) an und auf 0 Sekunden
+
+Die Felder werden nur befüllt, nicht sofort gespeichert – vor dem Klick auf
+"Speichern" lässt sich alles noch prüfen oder anpassen (z.B. andere
+Ordner, DPI/Zielgröße, Ähnlichkeits-Einstellungen).
+
+Damit das Zeitbudget von ca. 20 Sekunden ab dem letzten Foto einer Serie
+zuverlässig eingehalten wird, wurden außerdem folgende Stellen im Programm
+beschleunigt:
+
+- Der Ordnerüberwachungs-Ordner wird per `watchdog`-Ereignis sofort
+  benachrichtigt; die Prüfung, ob eine Datei fertig geschrieben ist
+  (Dateigröße stabil), pollt jetzt alle 0,2 statt 0,5 Sekunden.
+- Das Zeitfenster zur Serienerkennung (siehe oben) läuft als Debounce-Timer:
+  Er läuft `Zeitfenster`-Sekunden nach dem jeweils letzten Foto ab, bevor
+  die Serie zur Verarbeitung freigegeben wird – ein niedrigerer Wert (z.B.
+  10 Sekunden) senkt diese Wartezeit direkt. Ein zu niedriger Wert
+  verringert allerdings die Toleranz für Pausen zwischen Aufnahmen
+  derselben Serie; Fotos, die weiter auseinanderliegen, werden nur dann noch
+  zusammengeführt, wenn die Bildähnlichkeits-Erkennung sie **innerhalb**
+  desselben Erkennungsfensters als zusammengehörig erkennt.
+- Die GUI prüft alle 150 statt 300 Millisekunden auf eine fertig erkannte
+  Serie.
+- Im Protokoll wird jetzt transparent protokolliert, wie lange die
+  Erkennung gedauert hat ("Erkennung nach X,Xs") und wie viel Zeit
+  insgesamt von der Erkennung bis zum Abschluss der Serie (Export +
+  Verschieben) vergangen ist ("Gesamtdauer seit Erkennung: X,Xs") – so lässt
+  sich das 20-Sekunden-Ziel im laufenden Betrieb direkt nachvollziehen.
+
+Eine Ausnahme bleibt unvermeidbar: Beim allerersten Start muss das
+rembg-KI-Modell heruntergeladen werden (siehe unten), was mehrere Minuten
+dauern kann. Das 20-Sekunden-Ziel gilt für den Normalbetrieb mit bereits
+vorhandenem Modell.
 
 ### Installation
 

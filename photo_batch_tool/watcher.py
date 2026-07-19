@@ -11,7 +11,7 @@ from watchdog.observers import Observer
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
 
 
-def _wait_until_stable(path: Path, timeout: float = 20.0, interval: float = 0.5) -> bool:
+def _wait_until_stable(path: Path, timeout: float = 20.0, interval: float = 0.2) -> bool:
     """Wait until a file's size stops changing, so we don't read a half-copied file."""
     deadline = time.monotonic() + timeout
     last_size = -1

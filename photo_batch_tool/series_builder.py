@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
@@ -30,7 +31,7 @@ class SeriesBuilder:
     def __init__(
         self,
         window_seconds: int,
-        on_series_ready: Callable[[List[Path]], None],
+        on_series_ready: Callable[[List[Path], float], None],
         enable_similarity_grouping: bool = True,
         similarity_hamming_threshold: int = 8,
         similarity_max_extra_seconds: int = 240,
@@ -41,12 +42,14 @@ class SeriesBuilder:
         self.similarity_hamming_threshold = similarity_hamming_threshold
         self.similarity_max_extra_seconds = similarity_max_extra_seconds
         self._pending: List[Path] = []
+        self._arrival_times: Dict[Path, float] = {}
         self._lock = threading.Lock()
         self._timer: Optional[threading.Timer] = None
 
     def add_photo(self, path: Path) -> None:
         with self._lock:
             self._pending.append(path)
+            self._arrival_times[path] = time.monotonic()
             self._reset_timer_locked()
 
     def flush_now(self) -> None:
@@ -67,7 +70,9 @@ class SeriesBuilder:
     def _flush(self) -> None:
         with self._lock:
             pending = self._pending
+            arrival_times = self._arrival_times
             self._pending = []
+            self._arrival_times = {}
             self._timer = None
         if not pending:
             return
@@ -107,5 +112,7 @@ class SeriesBuilder:
             last_ts = ts
             last_path = path
 
+        now = time.monotonic()
         for group in series:
-            self.on_series_ready(group)
+            first_arrival = min((arrival_times.get(p, now) for p in group), default=now)
+            self.on_series_ready(group, first_arrival)

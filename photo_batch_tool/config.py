@@ -19,7 +19,7 @@ class Config:
     watch_folder: str = str(_default_config_dir() / "eingang")
     output_folder: str = str(_default_config_dir() / "export")
     done_folder: str = str(_default_config_dir() / "erledigt")
-    time_window_seconds: int = 60
+    time_window_seconds: int = 15
     target_dpi: int = 300
     target_size_mm: float = 19.0
     auto_accept_single: bool = False
