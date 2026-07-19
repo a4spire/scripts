@@ -17,7 +17,7 @@ from ..exif_utils import get_photo_timestamp
 from ..processing.background_removal import is_model_cached, remove_background
 from ..processing.errors import ProcessingError
 from ..processing.export import scale_and_export
-from ..processing.quality_check import assess_quality
+from ..processing.quality_check import split_by_quality
 from ..series_builder import SeriesBuilder
 from ..watcher import FolderWatcher
 from .circle_crop_editor import CircleCropEditor
@@ -125,38 +125,45 @@ class MainWindow(tk.Tk):
         self.after(300, self._poll_queue)
 
     def _present_series(self, photos: List[Path]) -> None:
+        selectable, excluded, assessments = split_by_quality(
+            photos,
+            self.config_obj.enable_quality_filter,
+            self.config_obj.quality_action,
+            self.config_obj.quality_blur_threshold,
+            self.config_obj.quality_min_brightness,
+            self.config_obj.quality_max_brightness,
+        )
+
         if len(photos) == 1 and self.config_obj.auto_accept_single:
-            if self.config_obj.enable_quality_filter:
-                assessment = None
-                try:
-                    with Image.open(photos[0]) as img:
-                        assessment = assess_quality(
-                            img.convert("RGB"),
-                            blur_threshold=self.config_obj.quality_blur_threshold,
-                            min_brightness=self.config_obj.quality_min_brightness,
-                            max_brightness=self.config_obj.quality_max_brightness,
-                        )
-                except Exception:
-                    assessment = None
-                if assessment is not None and assessment.is_low_quality:
-                    self._log_message(
-                        f"Einzelfoto der Serie zeigt mögliche Qualitätsprobleme "
-                        f"({', '.join(assessment.reasons)}) -- zeige trotz Auto-Übernahme zur Bestätigung."
-                    )
-                    SeriesSelectorDialog(
-                        self,
-                        photos,
-                        self.config_obj,
-                        on_confirm=lambda selected, excluded: self._start_processing(photos, selected, excluded),
-                    )
-                    return
-            self._start_processing(photos, photos[0], [])
-            return
+            assessment = assessments.get(photos[0])
+            if assessment is None or not assessment.is_low_quality:
+                self._start_processing(photos, photos[0], excluded)
+                return
+            self._log_message(
+                f"Einzelfoto der Serie zeigt mögliche Qualitätsprobleme "
+                f"({', '.join(assessment.reasons)}) -- zeige trotz Auto-Übernahme zur Bestätigung."
+            )
+        elif (
+            len(photos) > 1
+            and self.config_obj.auto_confirm_unambiguous_selection
+            and len(selectable) == 1
+        ):
+            sole_candidate = selectable[0]
+            candidate_assessment = assessments.get(sole_candidate)
+            if candidate_assessment is None or not candidate_assessment.is_low_quality:
+                self._log_message(
+                    f"Eindeutige Auswahl erkannt ({sole_candidate.name}, "
+                    f"{len(excluded)} andere(s) aussortiert) -- automatisch bestätigt."
+                )
+                self._start_processing(photos, sole_candidate, excluded)
+                return
+
         SeriesSelectorDialog(
             self,
-            photos,
-            self.config_obj,
-            on_confirm=lambda selected, excluded: self._start_processing(photos, selected, excluded),
+            selectable,
+            excluded,
+            assessments,
+            on_confirm=lambda selected, exc: self._start_processing(photos, selected, exc),
         )
 
     def _start_processing(self, series_photos: List[Path], selected: Path, excluded_low_quality: List[Path]) -> None:

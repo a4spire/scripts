@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Optional
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageStat
 
@@ -123,3 +124,55 @@ def assess_quality(
         no_face_detected=no_face_detected,
         eyes_closed_suspected=eyes_closed_suspected,
     )
+
+
+def _safe_open_image(path: Path) -> Optional[Image.Image]:
+    try:
+        with Image.open(path) as image:
+            return image.convert("RGB")
+    except Exception:
+        return None
+
+
+def split_by_quality(
+    photos: List[Path],
+    enable_quality_filter: bool,
+    quality_action: str,
+    blur_threshold: float = 100.0,
+    min_brightness: float = 40.0,
+    max_brightness: float = 220.0,
+) -> Tuple[List[Path], List[Path], Dict[Path, QualityAssessment]]:
+    """Assesses every photo and, in "auto_move" mode, splits them into
+    (selectable, excluded). Excluded stays empty unless quality filtering is
+    enabled, the action is "auto_move", at least one photo is flagged, and
+    not every photo is flagged -- a series that is entirely flagged always
+    stays fully selectable, so the user is never left with zero candidates.
+    This is the single source of truth for the split, shared by the series
+    selector dialog and by the auto-confirm check in the main window."""
+    assessments: Dict[Path, QualityAssessment] = {}
+    if enable_quality_filter:
+        for photo in photos:
+            image = _safe_open_image(photo)
+            if image is not None:
+                assessments[photo] = assess_quality(
+                    image,
+                    blur_threshold=blur_threshold,
+                    min_brightness=min_brightness,
+                    max_brightness=max_brightness,
+                )
+
+    low_quality = {p for p, a in assessments.items() if a.is_low_quality}
+
+    if (
+        enable_quality_filter
+        and quality_action == "auto_move"
+        and low_quality
+        and low_quality != set(photos)
+    ):
+        selectable = [p for p in photos if p not in low_quality]
+        excluded = [p for p in photos if p in low_quality]
+    else:
+        selectable = list(photos)
+        excluded = []
+
+    return selectable, excluded, assessments

@@ -118,6 +118,19 @@ Gesichter im Bild (kann bei Gruppenfotos legitim sein, keine
 Qualitätsaussage) und sehr niedrige Bildauflösung. Bei Bedarf lässt sich
 das ergänzen.
 
+#### Bei eindeutiger Auswahl automatisch bestätigen
+
+Zusätzliche Option (nur wirksam im Modus "Automatisch aussortieren"):
+Bleibt nach dem Aussortieren schlechter Fotos aus einer mehrteiligen Serie
+genau **ein** unmarkiertes Foto übrig – z.B. weil von drei Fotos zwei
+aussortiert wurden –, wird dieses eine Foto automatisch übernommen, ganz
+ohne Auswahldialog. Das ist eine eigene, bewusst getrennte Einstellung von
+"Einzelfoto-Serien automatisch übernehmen": Eine Serie, die von vornherein
+nur aus einem einzigen Foto besteht, fragt weiterhin kurz nach, sofern
+dieses Foto Qualitätsprobleme zeigt oder die separate Option dafür nicht
+aktiviert ist – "eindeutig" bedeutet hier ausdrücklich "durch Aussortieren
+eindeutig geworden", nicht "es gab ohnehin nur eins".
+
 ### Installation
 
 Voraussetzung: Python 3.10+ für Windows (von python.org, enthält Tkinter).

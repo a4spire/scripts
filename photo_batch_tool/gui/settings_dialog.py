@@ -36,6 +36,7 @@ class SettingsDialog(tk.Toplevel):
         self._quality_blur_var = tk.StringVar(value=str(config.quality_blur_threshold))
         self._quality_min_bright_var = tk.StringVar(value=str(config.quality_min_brightness))
         self._quality_max_bright_var = tk.StringVar(value=str(config.quality_max_brightness))
+        self._auto_confirm_var = tk.BooleanVar(value=config.auto_confirm_unambiguous_selection)
 
         folders = tk.LabelFrame(self, text="Ordner")
         folders.pack(fill="x", padx=10, pady=(10, 5))
@@ -113,6 +114,14 @@ class SettingsDialog(tk.Toplevel):
         tk.Entry(quality, textvariable=self._quality_max_bright_var, width=10).grid(
             row=4, column=1, sticky="w", pady=(0, 6)
         )
+        tk.Checkbutton(
+            quality,
+            text='Bei eindeutiger Auswahl automatisch bestätigen (nur wirksam bei "Automatisch aussortieren": '
+            "bleibt nach dem Aussortieren genau ein Foto übrig, wird es ohne Rückfrage verwendet)",
+            variable=self._auto_confirm_var,
+            wraplength=420,
+            justify="left",
+        ).grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=(2, 6))
 
         self._error_var = tk.StringVar(value="")
         tk.Label(self, textvariable=self._error_var, fg="#b00020", wraplength=420, justify="left").pack(
@@ -188,6 +197,7 @@ class SettingsDialog(tk.Toplevel):
         self._config.quality_blur_threshold = quality_blur
         self._config.quality_min_brightness = quality_min_bright
         self._config.quality_max_brightness = quality_max_bright
+        self._config.auto_confirm_unambiguous_selection = self._auto_confirm_var.get()
 
         self._on_save(self._config)
         self.destroy()

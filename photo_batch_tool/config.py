@@ -32,6 +32,7 @@ class Config:
     quality_blur_threshold: float = 100.0
     quality_min_brightness: float = 40.0
     quality_max_brightness: float = 220.0
+    auto_confirm_unambiguous_selection: bool = False
 
     @classmethod
     def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "Config":
