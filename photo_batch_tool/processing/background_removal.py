@@ -4,6 +4,7 @@ import hashlib
 import io
 import os
 import tempfile
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,9 @@ from typing import Optional
 from PIL import Image
 
 from .errors import BackgroundRemovalError, NoObjectDetectedError
+
+_session_lock = threading.Lock()
+_cached_session = None
 
 # Verified directly from the installed rembg source (U2netSession.download_models(),
 # BaseSession.u2net_home()) -- not guessed.
@@ -98,11 +102,48 @@ def ensure_model_available() -> None:
     )
 
 
-def remove_background(path: Path) -> Image.Image:
+def _get_session():
+    """Loads the U2Net ONNX model into memory once and reuses it for every
+    subsequent call. rembg's own `remove()` creates a brand-new session (i.e.
+    re-parses the ~170 MB model file from disk and re-initializes the
+    onnxruntime engine) on every call unless a session is passed in
+    explicitly -- for a batch of photos, that repeated setup cost dwarfs the
+    actual per-image inference time. onnxruntime sessions are safe to run
+    concurrently from multiple threads, so a single cached session also
+    supports several photos being processed in parallel."""
+    global _cached_session
+    if _cached_session is None:
+        with _session_lock:
+            if _cached_session is None:
+                from rembg import new_session
+
+                _cached_session = new_session("u2net")
+    return _cached_session
+
+
+def _resize_for_processing(image: Image.Image, max_dimension: int) -> Image.Image:
+    """Downscales an image so rembg has fewer pixels to run inference on.
+    Safe for this app's purposes: the final export is a small circular cutout
+    (a few hundred pixels for typical laser-engraving sizes), so shrinking a
+    multi-megapixel camera photo down to `max_dimension` before background
+    removal loses no visible quality while cutting inference time drastically."""
+    width, height = image.size
+    longest = max(width, height)
+    if longest <= max_dimension:
+        return image
+    scale = max_dimension / longest
+    new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return image.resize(new_size, Image.LANCZOS)
+
+
+def remove_background(path: Path, max_dimension: Optional[int] = None) -> Image.Image:
     """Runs rembg on the given photo and returns an RGBA image with a
     transparent background. Raises BackgroundRemovalError if rembg is
     unavailable or fails, and NoObjectDetectedError if the result is
-    fully transparent (no foreground found)."""
+    fully transparent (no foreground found).
+
+    If `max_dimension` is given, the photo is downscaled to it before being
+    handed to rembg (see `_resize_for_processing`)."""
     ensure_model_available()
 
     try:
@@ -120,8 +161,20 @@ def remove_background(path: Path) -> Image.Image:
     except OSError as exc:
         raise BackgroundRemovalError(f"Foto konnte nicht gelesen werden: {exc}") from exc
 
+    if max_dimension is not None:
+        try:
+            with Image.open(io.BytesIO(input_bytes)) as original:
+                original.load()
+                if max(original.size) > max_dimension:
+                    resized = _resize_for_processing(original.convert("RGB"), max_dimension)
+                    buffer = io.BytesIO()
+                    resized.save(buffer, format="PNG")
+                    input_bytes = buffer.getvalue()
+        except Exception:
+            pass  # any problem here just falls back to the original, full-resolution bytes
+
     try:
-        output_bytes = remove(input_bytes)
+        output_bytes = remove(input_bytes, session=_get_session())
     except Exception as exc:
         raise BackgroundRemovalError(f"Hintergrundentfernung fehlgeschlagen: {exc}") from exc
 

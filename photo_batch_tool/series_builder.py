@@ -48,12 +48,17 @@ class SeriesBuilder:
 
     def add_photo(self, path: Path) -> None:
         with self._lock:
+            if path in self._arrival_times:
+                # Already pending -- e.g. a manual "scan now" re-discovering a file the
+                # watcher already picked up. Ignore instead of queuing it twice.
+                return
             self._pending.append(path)
             self._arrival_times[path] = time.monotonic()
             self._reset_timer_locked()
 
     def flush_now(self) -> None:
-        """Force processing of whatever is currently pending (e.g. on shutdown)."""
+        """Force processing of whatever is currently pending (skips the debounce wait --
+        used for shutdown and for a user-triggered manual scan)."""
         with self._lock:
             if self._timer:
                 self._timer.cancel()

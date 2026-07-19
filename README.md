@@ -49,6 +49,52 @@ ist frei in der Größe veränderbar (Ziehen am Fensterrand) und scrollt seinen
 Inhalt, falls er nicht auf den Bildschirm passt -- "Speichern" und
 "Abbrechen" bleiben dabei immer sichtbar am unteren Rand.
 
+### Wie lange dauert die Verarbeitung, und "Jetzt scannen"
+
+Im Normalbetrieb (Modell bereits heruntergeladen) dauert die
+Hintergrundentfernung eines Fotos typischerweise wenige Sekunden bis
+niedrige zweistellige Sekunden, abhängig von Fotogröße und Hardware. Das
+Protokoll zeigt das jetzt transparent an:
+
+- "Erkennung nach X,Xs" -- wie lange die Serienerkennung (Zeitfenster) gebraucht hat.
+- "Hintergrundentfernung abgeschlossen in X,Xs: <Dateiname>" -- reine Verarbeitungszeit dieses Schritts.
+- "Gesamtdauer seit Erkennung: X,Xs" -- alles zusammen, von der Serienerkennung bis zum fertigen Export.
+
+Zwei Optimierungen sorgen dafür, dass das so schnell wie möglich geht:
+
+- Das rembg-KI-Modell wird nur **einmal** geladen und danach für alle Fotos
+  wiederverwendet, statt bei jedem Foto neu von der Festplatte geladen zu
+  werden (das Neuladen allein kostet spürbar Zeit und wiederholt sich sonst
+  bei jedem einzelnen Foto).
+- Große Kamerafotos werden vor der Hintergrundentfernung intern verkleinert
+  (die konfigurierte Zielgröße/DPI bestimmt, wie stark -- mit großzügigem
+  Puffer für Gesichtserkennung und Kreiszuschnitt). Das finale Ergebnis wird
+  davon nicht sichtbar schlechter, da der Export ohnehin nur wenige hundert
+  Pixel groß ist (z.B. 224×224 px bei 19 mm/300 DPI).
+
+Falls die Hintergrundentfernung bei bereits vorhandenem Modell trotzdem
+länger als 90 Sekunden für ein einzelnes Foto braucht, erscheint eine
+Fehlermeldung dazu (ungewöhnlich großes/komplexes Foto oder ausgelastete
+Hardware, kein Internet-/Firewall-Hinweis in diesem Fall -- der ist nur beim
+allerersten Modell-Download relevant, siehe unten).
+
+Der Button **"Jetzt scannen"** löst die Erkennung/Verarbeitung sofort aus,
+statt auf den Ablauf des Zeitfensters zu warten -- praktisch, wenn bereits
+Fotos im Überwachungsordner liegen und man nicht warten möchte, oder um die
+Überwachung bei Bedarf manuell anzustoßen. Läuft die Überwachung noch nicht,
+wird sie dabei automatisch gestartet.
+
+### Mehrere Fotos gleichzeitig verarbeiten
+
+Die Hintergrundentfernung mehrerer Serien kann parallel laufen (Standard: je
+nach CPU-Kernanzahl bis zu 4 gleichzeitig, siehe Protokoll-Meldung beim
+Start "Bis zu N Foto(s) können gleichzeitig..."), statt eine Serie komplett
+abzuwarten, bevor die nächste überhaupt angefangen wird. Nur die
+Dialogfenster (Fotoauswahl, Kreisausschnitt, Kundennamen-Abfrage) erscheinen
+weiterhin nacheinander -- pro Serie jeweils ein Fenster gleichzeitig, damit
+nichts durcheinandergerät --, während die eigentliche (langsame)
+Hintergrundentfernung mehrerer Serien im Hintergrund parallel läuft.
+
 ### Serienerkennung per Bildvergleich (bei größerem Zeitabstand)
 
 Ein zu großer Zeitabstand reißt eine Serie normalerweise auseinander, auch
