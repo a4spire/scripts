@@ -17,6 +17,11 @@ from .errors import BackgroundRemovalError, NoObjectDetectedError
 _session_lock = threading.Lock()
 _cached_session = None
 
+_rembg_lock = threading.Lock()
+_rembg_remove = None
+_rembg_new_session = None
+_rembg_import_error: Optional[BaseException] = None
+
 # Verified directly from the installed rembg source (U2netSession.download_models(),
 # BaseSession.u2net_home()) -- not guessed.
 _MODEL_URL = "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx"
@@ -102,6 +107,38 @@ def ensure_model_available() -> None:
     )
 
 
+def _get_rembg():
+    """Imports rembg exactly once, guarded by a lock, and caches the result
+    (the functions on success, the exception on failure).
+
+    Importing it directly inside `remove_background()` without this guard is
+    dangerous once photos are processed concurrently (see `_bg_executor` in
+    the main window): if the very first import fails partway through --
+    e.g. a transitive dependency's package metadata is missing in a frozen
+    EXE -- Python still leaves a half-initialized `rembg` module behind in
+    `sys.modules`. A second thread racing in at the same time then finds
+    that broken module instead of retrying the import, and fails with a
+    completely different, misleading error (`cannot import name 'remove'
+    from 'rembg'`) that hides the actual root cause. Funneling every import
+    attempt through one lock means only one thread ever executes the import,
+    and everyone else reliably sees either the real cached functions or the
+    real cached error."""
+    global _rembg_remove, _rembg_new_session, _rembg_import_error
+    if _rembg_remove is None and _rembg_import_error is None:
+        with _rembg_lock:
+            if _rembg_remove is None and _rembg_import_error is None:
+                try:
+                    from rembg import new_session, remove
+                except Exception as exc:  # pragma: no cover - exercised only when rembg is broken
+                    _rembg_import_error = exc
+                else:
+                    _rembg_remove = remove
+                    _rembg_new_session = new_session
+    if _rembg_import_error is not None:
+        raise _rembg_import_error
+    return _rembg_remove, _rembg_new_session
+
+
 def _get_session():
     """Loads the U2Net ONNX model into memory once and reuses it for every
     subsequent call. rembg's own `remove()` creates a brand-new session (i.e.
@@ -115,8 +152,7 @@ def _get_session():
     if _cached_session is None:
         with _session_lock:
             if _cached_session is None:
-                from rembg import new_session
-
+                _, new_session = _get_rembg()
                 _cached_session = new_session("u2net")
     return _cached_session
 
@@ -147,8 +183,8 @@ def remove_background(path: Path, max_dimension: Optional[int] = None) -> Image.
     ensure_model_available()
 
     try:
-        from rembg import remove
-    except ImportError as exc:
+        remove, _ = _get_rembg()
+    except Exception as exc:
         raise BackgroundRemovalError(
             "Die Bibliothek 'rembg' konnte nicht geladen werden "
             f"({exc}). Falls sie eigentlich installiert ist, könnte ein Teilmodul fehlen "

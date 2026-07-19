@@ -1,6 +1,6 @@
 # PyInstaller spec for the Photo Batch Tool.
 # Build with:  pyinstaller PhotoBatchTool.spec
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 datas = []
 binaries = []
@@ -11,6 +11,13 @@ for pkg in ("rembg", "onnxruntime", "cv2", "tkinterdnd2"):
     datas += pkg_datas
     binaries += pkg_binaries
     hiddenimports += pkg_hiddenimports
+
+# rembg imports pymatting at module load time (for alpha matting), and pymatting
+# reads its own version via importlib.metadata at import time. collect_all("rembg")
+# only bundles rembg's own dist-info, not this transitive dependency's -- without
+# it, `import rembg` fails in the frozen EXE with "No package metadata was found
+# for pymatting", taking the whole rembg import down with it.
+datas += copy_metadata("pymatting")
 
 a = Analysis(
     ["main.py"],
