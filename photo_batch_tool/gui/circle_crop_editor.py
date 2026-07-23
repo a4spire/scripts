@@ -1,0 +1,284 @@
+from __future__ import annotations
+
+import tkinter as tk
+from typing import Callable, Optional, Tuple
+
+from PIL import Image, ImageTk
+
+from ..processing.circle_crop import apply_circular_crop, max_radius_for_center
+from ..processing.face_detection import compute_default_circle, detect_faces
+
+MAX_DISPLAY = 640
+CHECKER_SIZE = 16
+PREVIEW_SIZE = 180
+HANDLE_DISPLAY_RADIUS = 6
+HANDLE_HIT_RADIUS = 12
+
+
+def _make_checkerboard(size: Tuple[int, int]) -> Image.Image:
+    width, height = max(1, size[0]), max(1, size[1])
+    tile = Image.new("RGB", (CHECKER_SIZE * 2, CHECKER_SIZE * 2), "#ffffff")
+    dark = Image.new("RGB", (CHECKER_SIZE, CHECKER_SIZE), "#dedede")
+    tile.paste(dark, (0, 0))
+    tile.paste(dark, (CHECKER_SIZE, CHECKER_SIZE))
+    board = Image.new("RGB", (width, height))
+    for y in range(0, height, tile.height):
+        for x in range(0, width, tile.width):
+            board.paste(tile, (x, y))
+    return board
+
+
+class CircleCropEditor(tk.Toplevel):
+    """Interactive circle placement over the background-removed photo.
+
+    The circle body can be dragged to move it, a handle on its edge can be
+    dragged to resize it directly, and the radius can also be adjusted with
+    the mouse wheel or the slider -- a live preview shows the resulting
+    circular cutout. The radius is automatically clamped so it can never
+    extend past the image edges.
+
+    If `timeout_seconds` is given, a visible countdown confirms whatever
+    circle is currently set once it reaches zero -- the countdown does not
+    reset on user interaction, it always fires when it elapses.
+    """
+
+    def __init__(
+        self,
+        master: tk.Misc,
+        image: Image.Image,
+        on_confirm: Callable[[Image.Image], None],
+        on_cancel: Optional[Callable[[], None]] = None,
+        timeout_seconds: Optional[int] = None,
+    ):
+        super().__init__(master)
+        self.title("Kreisausschnitt festlegen")
+        self.resizable(False, False)
+        self.transient(master)
+        self.grab_set()
+
+        self._source = image.convert("RGBA")
+        self._on_confirm = on_confirm
+        self._on_cancel = on_cancel
+        self._dragging = False
+        self._resizing = False
+        self._remaining_seconds = timeout_seconds
+        self._tick_after_id: Optional[str] = None
+
+        self._scale = min(1.0, MAX_DISPLAY / max(self._source.width, self._source.height))
+        self._display_size = (
+            max(1, round(self._source.width * self._scale)),
+            max(1, round(self._source.height * self._scale)),
+        )
+
+        checker = _make_checkerboard(self._display_size)
+        preview_base = self._source.resize(self._display_size, Image.LANCZOS)
+        checker.paste(preview_base, (0, 0), preview_base)
+        self._base_photo = ImageTk.PhotoImage(checker)
+
+        faces = detect_faces(self._source)
+        default_center, default_radius = compute_default_circle(self._source.size, faces)
+        self._center = list(default_center)
+        self._radius = default_radius
+
+        main = tk.Frame(self)
+        main.pack(padx=10, pady=10)
+
+        self._canvas = tk.Canvas(
+            main,
+            width=self._display_size[0],
+            height=self._display_size[1],
+            highlightthickness=1,
+            highlightbackground="#999999",
+        )
+        self._canvas.grid(row=0, column=0, padx=(0, 10))
+        self._canvas.create_image(0, 0, anchor="nw", image=self._base_photo)
+        self._circle_id = self._canvas.create_oval(0, 0, 0, 0, outline="#ff3b30", width=2)
+        self._handle_id = self._canvas.create_oval(
+            0, 0, 0, 0, fill="#ff3b30", outline="#ffffff", width=1
+        )
+
+        side = tk.Frame(main)
+        side.grid(row=0, column=1, sticky="n")
+        tk.Label(side, text="Vorschau").pack()
+        self._preview_label = tk.Label(side)
+        self._preview_label.pack(pady=(0, 10))
+
+        tk.Label(side, text="Ziehpunkt am Kreisrand zum Anpassen des Radius, oder:").pack()
+        tk.Label(side, text="Radius").pack()
+        self._radius_var = tk.DoubleVar(value=self._radius)
+        self._radius_scale = tk.Scale(
+            side,
+            from_=5,
+            to=self._max_possible_radius(),
+            orient="horizontal",
+            variable=self._radius_var,
+            command=self._on_radius_slider,
+            length=200,
+        )
+        self._radius_scale.pack()
+
+        self._status_var = tk.StringVar(value="")
+        tk.Label(side, textvariable=self._status_var, fg="#b00020", wraplength=200, justify="left").pack(
+            pady=(4, 10)
+        )
+
+        if self._remaining_seconds is not None:
+            self._countdown_var = tk.StringVar()
+            tk.Label(side, textvariable=self._countdown_var, fg="#555555").pack(pady=(0, 4))
+
+        button_row = tk.Frame(side)
+        button_row.pack(pady=(10, 0))
+        tk.Button(button_row, text="Bestätigen", command=self._confirm).pack(side="left", padx=4)
+        tk.Button(button_row, text="Abbrechen", command=self._cancel).pack(side="left", padx=4)
+
+        self._canvas.bind("<ButtonPress-1>", self._on_press)
+        self._canvas.bind("<B1-Motion>", self._on_drag)
+        self._canvas.bind("<Motion>", self._on_hover)
+        self._canvas.bind("<MouseWheel>", self._on_wheel)
+        self._canvas.bind("<Button-4>", lambda e: self._adjust_radius(10))
+        self._canvas.bind("<Button-5>", lambda e: self._adjust_radius(-10))
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+        self._redraw()
+
+        if self._remaining_seconds is not None:
+            self._tick()
+
+    def _max_possible_radius(self) -> float:
+        return max(10.0, min(self._source.width, self._source.height) / 2)
+
+    def _clamp_center_and_radius(self) -> None:
+        max_r = max_radius_for_center(self._source.size, tuple(self._center))
+        if self._radius > max_r:
+            self._radius = max_r
+            self._status_var.set("Radius wurde an den Bildrand angepasst.")
+        else:
+            self._status_var.set("")
+
+    def _to_image_coords(self, x: float, y: float) -> Tuple[float, float]:
+        return x / self._scale, y / self._scale
+
+    def _handle_display_position(self) -> Tuple[float, float]:
+        cx, cy = self._center[0] * self._scale, self._center[1] * self._scale
+        r = self._radius * self._scale
+        return cx + r, cy
+
+    def _on_press(self, event) -> None:
+        hx, hy = self._handle_display_position()
+        if ((event.x - hx) ** 2 + (event.y - hy) ** 2) ** 0.5 <= HANDLE_HIT_RADIUS:
+            self._resizing = True
+            self._dragging = False
+            return
+
+        self._resizing = False
+        cx, cy = self._to_image_coords(event.x, event.y)
+        dist = ((cx - self._center[0]) ** 2 + (cy - self._center[1]) ** 2) ** 0.5
+        self._dragging = dist <= self._radius
+
+    def _on_drag(self, event) -> None:
+        if self._resizing:
+            self._cancel_pending_tick(manual_edit=True)
+            cx, cy = self._to_image_coords(event.x, event.y)
+            self._radius = max(5.0, ((cx - self._center[0]) ** 2 + (cy - self._center[1]) ** 2) ** 0.5)
+            self._clamp_center_and_radius()
+            self._radius_var.set(self._radius)
+            self._redraw()
+            return
+
+        if not self._dragging:
+            return
+        self._cancel_pending_tick(manual_edit=True)
+        cx, cy = self._to_image_coords(event.x, event.y)
+        self._center = [
+            min(max(cx, 0), self._source.width),
+            min(max(cy, 0), self._source.height),
+        ]
+        self._clamp_center_and_radius()
+        self._redraw()
+
+    def _on_hover(self, event) -> None:
+        if self._dragging or self._resizing:
+            return
+        hx, hy = self._handle_display_position()
+        on_handle = ((event.x - hx) ** 2 + (event.y - hy) ** 2) ** 0.5 <= HANDLE_HIT_RADIUS
+        try:
+            self._canvas.config(cursor="sizing" if on_handle else "")
+        except tk.TclError:
+            pass  # cursor name unsupported on this platform -- purely cosmetic, safe to skip
+
+    def _on_wheel(self, event) -> None:
+        self._adjust_radius(10 if event.delta > 0 else -10)
+
+    def _adjust_radius(self, delta_display_px: float) -> None:
+        self._cancel_pending_tick(manual_edit=True)
+        self._radius = max(5.0, self._radius + delta_display_px / self._scale)
+        self._clamp_center_and_radius()
+        self._radius_var.set(self._radius)
+        self._redraw()
+
+    def _on_radius_slider(self, value: str) -> None:
+        self._cancel_pending_tick(manual_edit=True)
+        self._radius = float(value)
+        self._clamp_center_and_radius()
+        self._redraw()
+
+    def _redraw(self) -> None:
+        cx, cy = self._center[0] * self._scale, self._center[1] * self._scale
+        r = self._radius * self._scale
+        self._canvas.coords(self._circle_id, cx - r, cy - r, cx + r, cy + r)
+        hx, hy = self._handle_display_position()
+        self._canvas.coords(
+            self._handle_id,
+            hx - HANDLE_DISPLAY_RADIUS,
+            hy - HANDLE_DISPLAY_RADIUS,
+            hx + HANDLE_DISPLAY_RADIUS,
+            hy + HANDLE_DISPLAY_RADIUS,
+        )
+        self._update_preview()
+
+    def _update_preview(self) -> None:
+        try:
+            cropped = apply_circular_crop(self._source, tuple(self._center), self._radius)
+        except Exception:
+            return
+        preview = cropped.copy()
+        preview.thumbnail((PREVIEW_SIZE, PREVIEW_SIZE))
+        checker = _make_checkerboard(preview.size)
+        checker.paste(preview, (0, 0), preview)
+        self._preview_photo = ImageTk.PhotoImage(checker)
+        self._preview_label.config(image=self._preview_photo)
+
+    def _tick(self) -> None:
+        self._countdown_var.set(f"Automatische Bestätigung in {self._remaining_seconds} Sekunde(n) ...")
+        if self._remaining_seconds <= 0:
+            self._confirm()
+            return
+        self._remaining_seconds -= 1
+        self._tick_after_id = self.after(1000, self._tick)
+
+    def _cancel_pending_tick(self, manual_edit: bool = False) -> None:
+        if self._tick_after_id is not None:
+            self.after_cancel(self._tick_after_id)
+            self._tick_after_id = None
+            if manual_edit:
+                # Abort, don't just pause: once the user has manually moved/resized
+                # the circle, the countdown must not come back and override that later.
+                self._countdown_var.set("Automatische Bestätigung abgebrochen (manuell bearbeitet).")
+
+    def _confirm(self) -> None:
+        try:
+            cropped = apply_circular_crop(self._source, tuple(self._center), self._radius)
+        except Exception as exc:
+            self._status_var.set(str(exc))
+            return
+        self._cancel_pending_tick()
+        self.grab_release()
+        self.destroy()
+        self._on_confirm(cropped)
+
+    def _cancel(self) -> None:
+        self._cancel_pending_tick()
+        self.grab_release()
+        self.destroy()
+        if self._on_cancel:
+            self._on_cancel()
