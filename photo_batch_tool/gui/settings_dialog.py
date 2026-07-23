@@ -30,6 +30,7 @@ class SettingsDialog(tk.Toplevel):
         self._size_var = tk.StringVar(value=str(config.target_size_mm))
         self._auto_var = tk.BooleanVar(value=config.auto_accept_single)
         self._ask_customer_name_var = tk.BooleanVar(value=config.ask_customer_name)
+        self._ask_voucher_count_var = tk.BooleanVar(value=config.ask_voucher_count)
         self._similarity_enabled_var = tk.BooleanVar(value=config.enable_similarity_grouping)
         self._similarity_threshold_var = tk.StringVar(value=str(config.similarity_hamming_threshold))
         self._similarity_extra_var = tk.StringVar(value=str(config.similarity_max_extra_seconds))
@@ -120,7 +121,12 @@ class SettingsDialog(tk.Toplevel):
         ).grid(row=3, column=0, columnspan=3, sticky="w", padx=10, pady=(6, 2))
         tk.Checkbutton(
             processing, text="Kundennamen beim Export abfragen", variable=self._ask_customer_name_var
-        ).grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
+        ).grid(row=4, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 2))
+        tk.Checkbutton(
+            processing,
+            text="Anzahl abgegebener Vouchers nach der Bildbearbeitung abfragen",
+            variable=self._ask_voucher_count_var,
+        ).grid(row=5, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
 
         similarity = tk.LabelFrame(content, text="Serienerkennung per Bildähnlichkeit")
         similarity.pack(fill="x", padx=10, pady=5)
@@ -214,6 +220,7 @@ class SettingsDialog(tk.Toplevel):
         self._window_var.set("10")
         self._auto_var.set(True)
         self._ask_customer_name_var.set(False)
+        self._ask_voucher_count_var.set(False)
         self._quality_enabled_var.set(True)
         self._quality_action_var.set("Automatisch aussortieren")
         self._auto_confirm_var.set(True)
@@ -287,6 +294,7 @@ class SettingsDialog(tk.Toplevel):
         self._config.target_size_mm = size_mm
         self._config.auto_accept_single = self._auto_var.get()
         self._config.ask_customer_name = self._ask_customer_name_var.get()
+        self._config.ask_voucher_count = self._ask_voucher_count_var.get()
         self._config.enable_similarity_grouping = self._similarity_enabled_var.get()
         self._config.similarity_hamming_threshold = similarity_threshold
         self._config.similarity_max_extra_seconds = similarity_extra

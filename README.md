@@ -40,7 +40,10 @@ Kreis-Ausschnitt und Export als kreisrundes PNG in exakter physischer Größe
 6. **Export** – Speicherung als PNG mit transparentem Hintergrund und
    DPI-Metadaten im Ausgabeordner. Der Dateiname enthält den
    Serien-Zeitstempel und optional einen Kundennamen (die Abfrage danach
-   lässt sich in den Einstellungen abschalten, falls nicht relevant).
+   lässt sich in den Einstellungen abschalten, falls nicht relevant). Direkt
+   danach kann optional die Anzahl abgegebener Vouchers abgefragt werden
+   (ebenfalls über die Einstellungen an-/abschaltbar, standardmäßig aus) –
+   die Eingabe wird im Protokoll festgehalten ("Vouchers abgegeben: N").
 
 Alle Ordner, das Zeitfenster, die Ziel-DPI und die Zielgröße sind über den
 Button **Einstellungen** in der GUI konfigurierbar und werden in

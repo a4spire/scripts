@@ -514,19 +514,28 @@ class MainWindow(_BaseWindow):
     def _export_result(
         self, series_photos: List[Path], cropped: Image.Image, excluded_low_quality: List[Path], started_at: float
     ) -> None:
-        # simpledialog.askstring() is also a modal Tk popup (it pumps a nested event
-        # loop while open), so -- like the selector dialog and circle editor -- it
-        # has to go through the same GUI queue to avoid two modal grabs at once
-        # when several series finish around the same time.
-        if self.config_obj.ask_customer_name:
+        # simpledialog popups are also modal Tk popups (they pump a nested event
+        # loop while open), so -- like the selector dialog and circle editor -- they
+        # have to go through the same GUI queue to avoid two modal grabs at once
+        # when several series finish around the same time. Both optional prompts
+        # (customer name, voucher count) are asked back-to-back in one queued step,
+        # since they belong to the same "collect metadata for this series" point.
+        if self.config_obj.ask_customer_name or self.config_obj.ask_voucher_count:
 
             def ask_and_export() -> None:
                 try:
-                    customer = simpledialog.askstring("Kundenname", "Kundenname (optional):", parent=self) or ""
+                    customer = ""
+                    if self.config_obj.ask_customer_name:
+                        customer = simpledialog.askstring("Kundenname", "Kundenname (optional):", parent=self) or ""
+                    voucher_count = None
+                    if self.config_obj.ask_voucher_count:
+                        voucher_count = simpledialog.askinteger(
+                            "Vouchers", "Anzahl abgegebener Vouchers:", parent=self, minvalue=0
+                        )
                 except Exception as exc:
                     self._gui_done()
                     self._handle_processing_error(
-                        series_photos, f"Kundennamen-Abfrage fehlgeschlagen: {exc}", excluded_low_quality, started_at
+                        series_photos, f"Abfrage fehlgeschlagen: {exc}", excluded_low_quality, started_at
                     )
                     return
                 self._gui_done()
@@ -534,19 +543,22 @@ class MainWindow(_BaseWindow):
                     series_photos,
                     excluded_low_quality,
                     started_at,
-                    lambda: self._finish_export(series_photos, cropped, customer, excluded_low_quality, started_at),
+                    lambda: self._finish_export(
+                        series_photos, cropped, customer, voucher_count, excluded_low_quality, started_at
+                    ),
                 )
 
             self._enqueue_gui(ask_and_export)
             return
 
-        self._finish_export(series_photos, cropped, "", excluded_low_quality, started_at)
+        self._finish_export(series_photos, cropped, "", None, excluded_low_quality, started_at)
 
     def _finish_export(
         self,
         series_photos: List[Path],
         cropped: Image.Image,
         customer_name: str,
+        voucher_count: Optional[int],
         excluded_low_quality: List[Path],
         started_at: float,
     ) -> None:
@@ -564,6 +576,11 @@ class MainWindow(_BaseWindow):
             self._handle_processing_error(series_photos, f"Export fehlgeschlagen: {exc}", excluded_low_quality, started_at)
             return
         self._log_message(f"Export gespeichert: {out_path}")
+        if self.config_obj.ask_voucher_count:
+            if voucher_count is not None:
+                self._log_message(f"Vouchers abgegeben: {voucher_count}")
+            else:
+                self._log_message("Vouchers-Anzahl: keine Angabe gemacht")
         self._finish_series(series_photos, series_id, excluded_low_quality, started_at)
 
     def _finish_series(

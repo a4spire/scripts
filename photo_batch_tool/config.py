@@ -27,6 +27,7 @@ class Config:
     similarity_hamming_threshold: int = 8
     similarity_max_extra_seconds: int = 240
     ask_customer_name: bool = True
+    ask_voucher_count: bool = False
     enable_quality_filter: bool = True
     quality_action: str = "warn"  # "warn" (mark, still selectable) or "auto_move" (hide + move to aussortiert)
     quality_blur_threshold: float = 100.0
