@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-werkstatt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-werkstatt}
+      POSTGRES_DB: ${POSTGRES_DB:-werkstatt}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-werkstatt}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    restart: unless-stopped
+    environment:
+      ASR_MODEL: ${WHISPER_MODEL:-base}
+      ASR_ENGINE: faster_whisper
+    volumes:
+      - whisper_cache:/root/.cache
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      whisper:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-werkstatt}:${POSTGRES_PASSWORD:-werkstatt}@postgres:5432/${POSTGRES_DB:-werkstatt}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET muss gesetzt sein}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY muss gesetzt sein}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      WHISPER_API_URL: http://whisper:9000
+      PHOTO_STORAGE_DIR: /app/storage/photos
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD muss gesetzt sein}
+    volumes:
+      - photos:/app/storage/photos
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  whisper_cache:
+  photos:

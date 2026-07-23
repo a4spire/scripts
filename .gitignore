@@ -1,0 +1,28 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Env
+.env
+.env.local
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Backend
+backend/dist/
+backend/storage/photos/*
+!backend/storage/photos/.gitkeep
+
+# Frontend / Next.js
+frontend/.next/
+frontend/out/
+frontend/public/sw.js
+frontend/public/workbox-*.js
+frontend/public/sw.js.map
+frontend/public/worker-*.js
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
+# OS
+.DS_Store

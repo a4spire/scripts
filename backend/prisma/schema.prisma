@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum LocationType {
+  WERKSTATT
+  REGAL
+  FACH
+  BOX
+  SONSTIGE
+}
+
+enum MovementType {
+  IN
+  OUT
+  RETURN
+  CORRECTION
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum AiSourceType {
+  PHOTO
+  TEXT
+  VOICE
+  BARCODE_FALLBACK
+}
+
+enum AiCaptureStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  EDITED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  displayName  String
+  role         Role      @default(ADMIN)
+  createdAt    DateTime  @default(now())
+
+  movements    StockMovement[]
+  aiCaptures   AiCapture[]
+
+  @@map("users")
+}
+
+model Location {
+  id        String       @id @default(cuid())
+  parentId  String?
+  parent    Location?    @relation("LocationHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Location[]   @relation("LocationHierarchy")
+  name      String
+  type      LocationType @default(SONSTIGE)
+  qrCode    String?      @unique
+  createdAt DateTime     @default(now())
+
+  items     Item[]
+
+  @@index([parentId])
+  @@map("locations")
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryHierarchy")
+
+  items    Item[]
+
+  @@index([parentId])
+  @@map("categories")
+}
+
+model Item {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  locationId     String?
+  location       Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  unit           String    @default("Stk")
+  quantity       Decimal   @default(0) @db.Decimal(12, 3)
+  minQuantity    Decimal   @default(0) @db.Decimal(12, 3)
+  manufacturer   String?
+  specs          Json?
+  purchasePrice  Decimal?  @db.Decimal(12, 2)
+  purchaseSource String?
+  photoPath      String?
+  barcode        String?   @unique
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  movements      StockMovement[]
+  aiCaptures     AiCapture[]
+
+  @@index([categoryId])
+  @@index([locationId])
+  @@map("items")
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  completedAt DateTime?
+
+  movements   StockMovement[]
+
+  @@map("projects")
+}
+
+model StockMovement {
+  id        String       @id @default(cuid())
+  itemId    String
+  item      Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type      MovementType
+  quantity  Decimal      @db.Decimal(12, 3)
+  projectId String?
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reason    String?
+  createdAt DateTime     @default(now())
+
+  aiCapture AiCapture?
+
+  @@index([itemId])
+  @@index([projectId])
+  @@index([userId])
+  @@map("stock_movements")
+}
+
+model AiCapture {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceType      AiSourceType
+  rawInput        String
+  proposedAction  Json
+  status          AiCaptureStatus @default(PENDING)
+  resultItemId    String?
+  resultItem      Item?           @relation(fields: [resultItemId], references: [id], onDelete: SetNull)
+  resultMovementId String?        @unique
+  resultMovement  StockMovement?  @relation(fields: [resultMovementId], references: [id], onDelete: SetNull)
+  createdAt       DateTime        @default(now())
+  confirmedAt     DateTime?
+
+  @@map("ai_captures")
+}
