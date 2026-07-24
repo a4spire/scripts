@@ -36,10 +36,17 @@ export default async function itemRoutes(fastify: FastifyInstance) {
   fastify.addHook("preHandler", fastify.requireAuth);
 
   fastify.get("/api/items", async (request) => {
-    const { search, lowStock } = request.query as { search?: string; lowStock?: string };
+    const { search, lowStock, locationId } = request.query as {
+      search?: string;
+      lowStock?: string;
+      locationId?: string;
+    };
     const where: Prisma.ItemWhereInput = {};
     if (search) {
       where.name = { contains: search, mode: "insensitive" };
+    }
+    if (locationId) {
+      where.locationId = locationId;
     }
     const items = await prisma.item.findMany({
       where,
@@ -50,6 +57,16 @@ export default async function itemRoutes(fastify: FastifyInstance) {
       return items.filter((item) => new Prisma.Decimal(item.quantity).lte(item.minQuantity));
     }
     return items;
+  });
+
+  fastify.get("/api/items/barcode/:code", async (request, reply) => {
+    const { code } = request.params as { code: string };
+    const item = await prisma.item.findUnique({
+      where: { barcode: code },
+      include: { category: true, location: true },
+    });
+    if (!item) return reply.code(404).send({ error: "Kein Artikel mit diesem Code gefunden" });
+    return item;
   });
 
   fastify.get("/api/items/:id", async (request, reply) => {

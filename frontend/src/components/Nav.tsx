@@ -9,6 +9,7 @@ const links = [
   { href: "/items", label: "Artikel" },
   { href: "/locations", label: "Lagerorte" },
   { href: "/projects", label: "Projekte" },
+  { href: "/scan", label: "Scannen" },
   { href: "/capture", label: "KI-Erfassung" },
 ];
 

@@ -22,6 +22,7 @@ const createItemOpSchema = z.object({
   minQuantity: z.coerce.number().min(0).default(0),
   initialQuantity: z.coerce.number().min(0).nullable().optional(),
   usePendingPhoto: z.boolean().optional(),
+  barcode: z.string().nullable().optional(),
 });
 
 const bookMovementOpSchema = z.object({
@@ -150,6 +151,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
             categoryId: op.categoryId ?? undefined,
             locationId: op.locationId ?? undefined,
             minQuantity: op.minQuantity,
+            barcode: op.barcode ?? undefined,
           },
         });
         resultItemId = item.id;

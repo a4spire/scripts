@@ -1,20 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, Item } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
+import { api, Item, Location } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 
-export default function ItemsPage() {
+function ItemsPageContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const locationId = searchParams.get("locationId");
+
   const [items, setItems] = useState<Item[] | null>(null);
+  const [location, setLocation] = useState<Location | null>(null);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!user) return;
-    const params = search ? `?search=${encodeURIComponent(search)}` : "";
-    api.get<Item[]>(`/api/items${params}`).then(setItems);
-  }, [user, search]);
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (locationId) params.set("locationId", locationId);
+    const qs = params.toString();
+    api.get<Item[]>(`/api/items${qs ? `?${qs}` : ""}`).then(setItems);
+  }, [user, search, locationId]);
+
+  useEffect(() => {
+    if (!locationId) {
+      setLocation(null);
+      return;
+    }
+    api.get<Location>(`/api/locations/${locationId}`).then(setLocation).catch(() => setLocation(null));
+  }, [locationId]);
 
   return (
     <div className="space-y-4">
@@ -24,6 +40,16 @@ export default function ItemsPage() {
           + Neuer Artikel
         </Link>
       </div>
+
+      {locationId && (
+        <div className="flex items-center gap-2 text-sm bg-blue-50 text-blue-800 rounded-md px-3 py-2">
+          <span>Gefiltert nach Lagerort: {location?.name ?? locationId}</span>
+          <Link href="/items" className="underline">
+            Filter entfernen
+          </Link>
+        </div>
+      )}
+
       <input
         placeholder="Suche nach Name…"
         value={search}
@@ -52,5 +78,13 @@ export default function ItemsPage() {
         </ul>
       </div>
     </div>
+  );
+}
+
+export default function ItemsPage() {
+  return (
+    <Suspense fallback={<p>Lädt…</p>}>
+      <ItemsPageContent />
+    </Suspense>
   );
 }

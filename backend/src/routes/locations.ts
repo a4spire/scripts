@@ -16,6 +16,13 @@ export default async function locationRoutes(fastify: FastifyInstance) {
     return prisma.location.findMany({ orderBy: { name: "asc" } });
   });
 
+  fastify.get("/api/locations/qr/:code", async (request, reply) => {
+    const { code } = request.params as { code: string };
+    const location = await prisma.location.findUnique({ where: { qrCode: code } });
+    if (!location) return reply.code(404).send({ error: "Kein Lagerort mit diesem Code gefunden" });
+    return location;
+  });
+
   fastify.get("/api/locations/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
     const location = await prisma.location.findUnique({

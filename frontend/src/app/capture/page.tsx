@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api, ApiError, Category, Item, Location, Project } from "@/lib/api";
 
 type CreateItemOp = {
@@ -15,6 +16,7 @@ type CreateItemOp = {
   minQuantity: number;
   initialQuantity: number | null;
   usePendingPhoto?: boolean;
+  barcode?: string | null;
 };
 
 type BookMovementOp = {
@@ -70,7 +72,10 @@ function findIdByName<T extends { id: string; name: string }>(list: T[], name?: 
   return match?.id ?? null;
 }
 
-export default function CapturePage() {
+function CapturePageContent() {
+  const searchParams = useSearchParams();
+  const pendingBarcode = searchParams.get("barcode");
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -124,6 +129,7 @@ export default function CapturePage() {
               locationId: findIdByName(locations, a.locationName),
               minQuantity: 0,
               initialQuantity: a.initialQuantity ?? null,
+              barcode: pendingBarcode,
             };
           }
           return {
@@ -168,6 +174,7 @@ export default function CapturePage() {
           minQuantity: 0,
           initialQuantity: null,
           usePendingPhoto: true,
+          barcode: pendingBarcode,
         },
       ]);
     } catch (err) {
@@ -206,6 +213,13 @@ export default function CapturePage() {
       <p className="text-sm text-gray-500">
         Nichts wird gebucht, bevor du den Vorschlag unten geprüft und bestätigt hast.
       </p>
+
+      {pendingBarcode && (
+        <p className="text-sm bg-blue-50 text-blue-800 rounded-md px-3 py-2">
+          Unbekannter gescannter Code <span className="font-mono">{pendingBarcode}</span> — wird bei
+          Anlage des neuen Artikels automatisch als Barcode übernommen.
+        </p>
+      )}
 
       <section className="card space-y-3">
         <h2 className="font-medium">Freitext-Eingabe</h2>
@@ -299,6 +313,11 @@ export default function CapturePage() {
                     onChange={(e) => updateOp(idx, { ...op, unit: e.target.value })}
                   />
                 </div>
+                <input
+                  placeholder="Barcode (optional)"
+                  value={op.barcode ?? ""}
+                  onChange={(e) => updateOp(idx, { ...op, barcode: e.target.value || null })}
+                />
               </div>
             ) : (
               <div key={idx} className="border rounded-md p-3 space-y-2">
@@ -362,4 +381,12 @@ export default function CapturePage() {
   function updateOp(idx: number, next: Op) {
     setOps((prev) => prev.map((o, i) => (i === idx ? next : o)));
   }
+}
+
+export default function CapturePage() {
+  return (
+    <Suspense fallback={<p>Lädt…</p>}>
+      <CapturePageContent />
+    </Suspense>
+  );
 }
