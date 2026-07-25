@@ -17,11 +17,14 @@ function ItemsPageContent() {
 
   useEffect(() => {
     if (!user) return;
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (locationId) params.set("locationId", locationId);
-    const qs = params.toString();
-    api.get<Item[]>(`/api/items${qs ? `?${qs}` : ""}`).then(setItems);
+    const timeout = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (locationId) params.set("locationId", locationId);
+      const qs = params.toString();
+      api.get<Item[]>(`/api/items${qs ? `?${qs}` : ""}`).then(setItems);
+    }, 250);
+    return () => clearTimeout(timeout);
   }, [user, search, locationId]);
 
   useEffect(() => {
@@ -51,7 +54,7 @@ function ItemsPageContent() {
       )}
 
       <input
-        placeholder="Suche nach Name…"
+        placeholder="Suche (Name, Beschreibung, Hersteller, Specs, Barcode)…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="max-w-sm"

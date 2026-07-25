@@ -32,6 +32,53 @@ function toJsonInput(specs: Record<string, unknown> | null | undefined) {
   return specs as Prisma.InputJsonValue;
 }
 
+// Full-text search over name/description/manufacturer (German stemming via to_tsvector, so
+// "Schrauben" also matches "Schraube"), OR-ed with plain ILIKE across those fields plus barcode
+// and specs (cast to text) so exact model numbers / spec values still match even when stemming
+// would miss them. Falls back to a simple ILIKE-only search if the tsquery ever fails to parse.
+async function searchItems(term: string, locationId?: string) {
+  const likeTerm = `%${term}%`;
+  let ranked: { id: string }[];
+  try {
+    ranked = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM items
+      WHERE
+        to_tsvector('german', coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || coalesce(manufacturer, ''))
+          @@ plainto_tsquery('german', ${term})
+        OR name ILIKE ${likeTerm}
+        OR description ILIKE ${likeTerm}
+        OR manufacturer ILIKE ${likeTerm}
+        OR barcode ILIKE ${likeTerm}
+        OR specs::text ILIKE ${likeTerm}
+      ORDER BY
+        ts_rank(
+          to_tsvector('german', coalesce(name, '') || ' ' || coalesce(description, '') || ' ' || coalesce(manufacturer, '')),
+          plainto_tsquery('german', ${term})
+        ) DESC,
+        name ASC
+    `;
+  } catch {
+    ranked = await prisma.$queryRaw<{ id: string }[]>`
+      SELECT id FROM items
+      WHERE name ILIKE ${likeTerm}
+         OR description ILIKE ${likeTerm}
+         OR manufacturer ILIKE ${likeTerm}
+         OR barcode ILIKE ${likeTerm}
+      ORDER BY name ASC
+    `;
+  }
+
+  const order = new Map(ranked.map((r, i) => [r.id, i]));
+  const items = await prisma.item.findMany({
+    where: {
+      id: { in: ranked.map((r) => r.id) },
+      ...(locationId ? { locationId } : {}),
+    },
+    include: { category: true, location: true },
+  });
+  return items.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+}
+
 export default async function itemRoutes(fastify: FastifyInstance) {
   fastify.addHook("preHandler", fastify.requireAuth);
 
@@ -41,18 +88,19 @@ export default async function itemRoutes(fastify: FastifyInstance) {
       lowStock?: string;
       locationId?: string;
     };
-    const where: Prisma.ItemWhereInput = {};
-    if (search) {
-      where.name = { contains: search, mode: "insensitive" };
+
+    let items;
+    const term = search?.trim();
+    if (term) {
+      items = await searchItems(term, locationId);
+    } else {
+      items = await prisma.item.findMany({
+        where: locationId ? { locationId } : undefined,
+        include: { category: true, location: true },
+        orderBy: { name: "asc" },
+      });
     }
-    if (locationId) {
-      where.locationId = locationId;
-    }
-    const items = await prisma.item.findMany({
-      where,
-      include: { category: true, location: true },
-      orderBy: { name: "asc" },
-    });
+
     if (lowStock === "true") {
       return items.filter((item) => new Prisma.Decimal(item.quantity).lte(item.minQuantity));
     }
