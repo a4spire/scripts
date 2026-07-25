@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, ApiError, Project, StockMovement } from "@/lib/api";
+import { api, apiUrl, ApiError, Project, StockMovement } from "@/lib/api";
 
 type ProjectDetail = Project & { movements: StockMovement[] };
 
@@ -63,15 +63,23 @@ export default function ProjectDetailPage() {
           <h1 className="text-xl font-semibold">{project.name}</h1>
           {project.description && <p className="text-sm text-gray-500">{project.description}</p>}
         </div>
-        <select
-          value={project.status}
-          onChange={(e) => updateStatus(e.target.value as Project["status"])}
-          className="w-auto"
-        >
-          <option value="ACTIVE">Aktiv</option>
-          <option value="COMPLETED">Abgeschlossen</option>
-          <option value="ARCHIVED">Archiviert</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <a href={apiUrl(`/api/projects/${id}/export?format=csv`)} className="btn-secondary text-sm">
+            CSV exportieren
+          </a>
+          <a href={apiUrl(`/api/projects/${id}/export?format=pdf`)} className="btn-secondary text-sm">
+            PDF exportieren
+          </a>
+          <select
+            value={project.status}
+            onChange={(e) => updateStatus(e.target.value as Project["status"])}
+            className="w-auto"
+          >
+            <option value="ACTIVE">Aktiv</option>
+            <option value="COMPLETED">Abgeschlossen</option>
+            <option value="ARCHIVED">Archiviert</option>
+          </select>
+        </div>
       </div>
 
       <section className="card">

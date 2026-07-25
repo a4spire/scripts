@@ -41,6 +41,10 @@ export function photoUrl(photoPath: string | null | undefined) {
   return `${API_URL}/photos/${photoPath}`;
 }
 
+export function apiUrl(path: string) {
+  return `${API_URL}${path}`;
+}
+
 export interface User {
   id: string;
   email: string;
