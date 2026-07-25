@@ -111,6 +111,14 @@ Voice capture (`POST /api/ai/voice`) transcribes via a local Whisper ASR contain
 confirmation path as text capture. Claude has no direct audio input in this codebase; transcription is
 a separate self-hosted step by design (see `docs/ARCHITECTURE.md` stack rationale).
 
+### CORS
+
+`@fastify/cors` is registered in `server.ts` with an explicit `methods: ["GET", "POST", "PATCH",
+"DELETE"]` — this is required, not decorative. `@fastify/cors` v9 (Fastify 4) defaulted to allowing
+all methods; v11 (Fastify 5, current) defaults to `GET,HEAD,POST` only, which silently breaks every
+PATCH/DELETE route for browser clients (fails at the CORS preflight, not at the route) unless
+overridden. If you add a new HTTP method anywhere, update this list too.
+
 ### Auth
 
 Cookie session via `@fastify/session` (in-memory store — fine for one Fastify instance, would need a

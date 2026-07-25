@@ -22,6 +22,7 @@ async function buildServer() {
   await fastify.register(cors, {
     origin: env.corsOrigin,
     credentials: true,
+    methods: ["GET", "POST", "PATCH", "DELETE"],
   });
   await fastify.register(multipart, {
     limits: { fileSize: 25 * 1024 * 1024 },
