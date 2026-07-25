@@ -11,6 +11,7 @@ import itemRoutes from "./routes/items.js";
 import movementRoutes from "./routes/movements.js";
 import projectRoutes from "./routes/projects.js";
 import aiRoutes from "./routes/ai.js";
+import statsRoutes from "./routes/stats.js";
 
 async function buildServer() {
   const fastify = Fastify({
@@ -38,6 +39,7 @@ async function buildServer() {
   await fastify.register(movementRoutes);
   await fastify.register(projectRoutes);
   await fastify.register(aiRoutes);
+  await fastify.register(statsRoutes);
 
   fastify.get("/api/health", async () => ({ status: "ok" }));
 

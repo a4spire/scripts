@@ -56,6 +56,9 @@ export default function DashboardPage() {
         <Link href="/projects" className="card text-center hover:bg-gray-50">
           Projekte
         </Link>
+        <Link href="/stats" className="card text-center hover:bg-gray-50">
+          Statistik
+        </Link>
         <Link href="/scan" className="card text-center hover:bg-gray-50">
           Scannen
         </Link>
