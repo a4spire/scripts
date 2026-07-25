@@ -86,12 +86,26 @@ export default async function aiRoutes(fastify: FastifyInstance) {
     return { capture, proposal };
   });
 
-  fastify.post("/api/ai/voice", async (request) => {
+  fastify.post("/api/ai/voice", async (request, reply) => {
     const file = await request.file();
-    if (!file) throw new Error("Keine Audiodatei übermittelt");
+    if (!file) return reply.code(400).send({ error: "Keine Audiodatei übermittelt" });
     const buffer = await file.toBuffer();
 
-    const transcript = await transcribeAudio(buffer, file.filename, file.mimetype);
+    let transcript: string;
+    try {
+      transcript = await transcribeAudio(buffer, file.filename, file.mimetype);
+    } catch (err) {
+      request.log.error(err, "Whisper-Transkription fehlgeschlagen");
+      const knownMessage =
+        err instanceof Error && /^(WHISPER_API_URL|Whisper-Transkription)/.test(err.message)
+          ? err.message
+          : "Sprachnotiz-Dienst (Whisper) ist gerade nicht erreichbar";
+      return reply.code(502).send({ error: knownMessage });
+    }
+    if (!transcript) {
+      return reply.code(422).send({ error: "Sprachnotiz konnte nicht transkribiert werden (leeres Ergebnis)" });
+    }
+
     const proposal = await parseFreeText(transcript);
     const capture = await prisma.aiCapture.create({
       data: {

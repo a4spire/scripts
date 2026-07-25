@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, ApiError, Category, Item, Location, Project } from "@/lib/api";
 
@@ -30,6 +30,26 @@ type BookMovementOp = {
 
 type Op = CreateItemOp | BookMovementOp;
 
+interface TextActionResponse {
+  type: "create_item" | "book_movement";
+  item?: {
+    name: string;
+    categoryName?: string | null;
+    description?: string | null;
+    manufacturer?: string | null;
+    specs?: Record<string, unknown> | null;
+    unit: string;
+  };
+  locationName?: string | null;
+  initialQuantity?: number | null;
+  itemId?: string | null;
+  itemName?: string;
+  movementType?: "IN" | "OUT" | "RETURN" | "CORRECTION";
+  quantity?: number;
+  projectName?: string | null;
+  reason?: string | null;
+}
+
 interface CaptureResponse {
   capture: { id: string };
   proposal: {
@@ -44,32 +64,57 @@ interface CaptureResponse {
       unit: string;
     };
     confidence?: number;
-    actions?: Array<{
-      type: "create_item" | "book_movement";
-      item?: {
-        name: string;
-        categoryName?: string | null;
-        description?: string | null;
-        manufacturer?: string | null;
-        specs?: Record<string, unknown> | null;
-        unit: string;
-      };
-      locationName?: string | null;
-      initialQuantity?: number | null;
-      itemId?: string | null;
-      itemName?: string;
-      movementType?: "IN" | "OUT" | "RETURN" | "CORRECTION";
-      quantity?: number;
-      projectName?: string | null;
-      reason?: string | null;
-    }>;
+    actions?: TextActionResponse[];
   };
+  transcript?: string;
+}
+
+const RECORDER_MIME_TYPES = ["audio/webm", "audio/ogg", "audio/mp4"];
+
+function pickSupportedMimeType() {
+  if (typeof MediaRecorder === "undefined") return null;
+  return RECORDER_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null;
 }
 
 function findIdByName<T extends { id: string; name: string }>(list: T[], name?: string | null) {
   if (!name) return null;
   const match = list.find((x) => x.name.toLowerCase() === name.toLowerCase());
   return match?.id ?? null;
+}
+
+function mapActionsToOps(
+  actions: TextActionResponse[],
+  categories: Category[],
+  locations: Location[],
+  projects: Project[],
+  items: Item[],
+  pendingBarcode: string | null
+): Op[] {
+  return actions.map((a): Op => {
+    if (a.type === "create_item" && a.item) {
+      return {
+        kind: "create_item",
+        name: a.item.name,
+        description: a.item.description ?? null,
+        manufacturer: a.item.manufacturer ?? null,
+        specs: a.item.specs ?? null,
+        unit: a.item.unit ?? "Stk",
+        categoryId: findIdByName(categories, a.item.categoryName),
+        locationId: findIdByName(locations, a.locationName),
+        minQuantity: 0,
+        initialQuantity: a.initialQuantity ?? null,
+        barcode: pendingBarcode,
+      };
+    }
+    return {
+      kind: "book_movement",
+      itemId: a.itemId ?? findIdByName(items, a.itemName) ?? "",
+      movementType: a.movementType ?? "OUT",
+      quantity: a.quantity ?? 1,
+      projectId: findIdByName(projects, a.projectName),
+      reason: a.reason ?? null,
+    };
+  });
 }
 
 function CapturePageContent() {
@@ -86,10 +131,18 @@ function CapturePageContent() {
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [ops, setOps] = useState<Op[]>([]);
-  const [isPhotoCapture, setIsPhotoCapture] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+
+  const [recordingState, setRecordingState] = useState<"idle" | "recording" | "recorded">("idle");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     api.get<Category[]>("/api/categories").then(setCategories);
@@ -98,12 +151,21 @@ function CapturePageContent() {
     api.get<Item[]>("/api/items").then(setItems);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl]);
+
   function reset() {
     setCaptureId(null);
     setSummary(null);
     setOps([]);
     setDone(null);
     setError(null);
+    setTranscript(null);
   }
 
   async function handleTextSubmit(e: React.FormEvent) {
@@ -114,34 +176,7 @@ function CapturePageContent() {
       const res = await api.post<CaptureResponse>("/api/ai/text", { text });
       setCaptureId(res.capture.id);
       setSummary(res.proposal.summary ?? null);
-      setIsPhotoCapture(false);
-      setOps(
-        (res.proposal.actions ?? []).map((a): Op => {
-          if (a.type === "create_item" && a.item) {
-            return {
-              kind: "create_item",
-              name: a.item.name,
-              description: a.item.description ?? null,
-              manufacturer: a.item.manufacturer ?? null,
-              specs: a.item.specs ?? null,
-              unit: a.item.unit ?? "Stk",
-              categoryId: findIdByName(categories, a.item.categoryName),
-              locationId: findIdByName(locations, a.locationName),
-              minQuantity: 0,
-              initialQuantity: a.initialQuantity ?? null,
-              barcode: pendingBarcode,
-            };
-          }
-          return {
-            kind: "book_movement",
-            itemId: a.itemId ?? findIdByName(items, a.itemName) ?? "",
-            movementType: a.movementType ?? "OUT",
-            quantity: a.quantity ?? 1,
-            projectId: findIdByName(projects, a.projectName),
-            reason: a.reason ?? null,
-          };
-        })
-      );
+      setOps(mapActionsToOps(res.proposal.actions ?? [], categories, locations, projects, items, pendingBarcode));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Erfassung fehlgeschlagen");
     } finally {
@@ -159,7 +194,6 @@ function CapturePageContent() {
       body.append("file", photoFile);
       const res = await api.post<CaptureResponse>("/api/ai/photo", body);
       setCaptureId(res.capture.id);
-      setIsPhotoCapture(true);
       const item = res.proposal.item!;
       setOps([
         {
@@ -205,6 +239,75 @@ function CapturePageContent() {
     reset();
     setText("");
     setPhotoFile(null);
+    discardRecording();
+  }
+
+  function discardRecording() {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setRecordingState("idle");
+    setRecordingSeconds(0);
+  }
+
+  async function startRecording() {
+    setError(null);
+    discardRecording();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = pickSupportedMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType ?? recorder.mimeType });
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+        setRecordingState("recorded");
+        if (recordingIntervalRef.current) {
+          clearInterval(recordingIntervalRef.current);
+          recordingIntervalRef.current = null;
+        }
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecordingState("recording");
+      setRecordingSeconds(0);
+      recordingIntervalRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch {
+      setError(
+        "Mikrofon konnte nicht gestartet werden. Bitte Berechtigung erlauben (erfordert HTTPS oder localhost)."
+      );
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+  }
+
+  async function handleVoiceSubmit() {
+    if (!audioBlob) return;
+    reset();
+    setBusy(true);
+    try {
+      const body = new FormData();
+      const extension = audioBlob.type.includes("ogg") ? "ogg" : audioBlob.type.includes("mp4") ? "mp4" : "webm";
+      body.append("file", audioBlob, `sprachnotiz.${extension}`);
+      const res = await api.post<CaptureResponse>("/api/ai/voice", body);
+      setCaptureId(res.capture.id);
+      setSummary(res.proposal.summary ?? null);
+      setTranscript(res.transcript ?? null);
+      setOps(mapActionsToOps(res.proposal.actions ?? [], categories, locations, projects, items, pendingBarcode));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Sprachnotiz-Verarbeitung fehlgeschlagen");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -249,6 +352,41 @@ function CapturePageContent() {
             {busy ? "Analysiert…" : "Foto analysieren"}
           </button>
         </form>
+      </section>
+
+      <section className="card space-y-3">
+        <h2 className="font-medium">Sprachnotiz</h2>
+        <div className="flex items-center gap-3">
+          {recordingState === "idle" && (
+            <button type="button" className="btn" onClick={startRecording}>
+              Aufnahme starten
+            </button>
+          )}
+          {recordingState === "recording" && (
+            <>
+              <button type="button" className="btn" onClick={stopRecording}>
+                Aufnahme stoppen
+              </button>
+              <span className="text-sm text-red-600">● {recordingSeconds}s</span>
+            </>
+          )}
+          {recordingState === "recorded" && audioUrl && (
+            <>
+              <audio controls src={audioUrl} className="h-9" />
+              <button type="button" className="btn" onClick={handleVoiceSubmit} disabled={busy}>
+                {busy ? "Verarbeitet…" : "Analysieren"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={discardRecording} disabled={busy}>
+                Neu aufnehmen
+              </button>
+            </>
+          )}
+        </div>
+        {transcript && (
+          <p className="text-sm text-gray-500">
+            Transkript: <span className="italic">„{transcript}“</span>
+          </p>
+        )}
       </section>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
