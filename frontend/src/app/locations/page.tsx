@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, ApiError, Location } from "@/lib/api";
+import { api, apiUrl, ApiError, Location } from "@/lib/api";
 
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", type: "REGAL", parentId: "" });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   async function load() {
     setLocations(await api.get<Location[]>("/api/locations"));
@@ -38,9 +39,27 @@ export default function LocationsPage() {
     return parent ? `${pathFor(parent)} → ${loc.name}` : loc.name;
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === locations.length ? new Set() : new Set(locations.map((l) => l.id))));
+  }
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Lagerorte</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Lagerorte</h1>
+        <a href={apiUrl("/api/locations/labels/pdf")} className="btn-secondary text-sm">
+          Alle Labels drucken (PDF)
+        </a>
+      </div>
 
       <section className="card space-y-3">
         <h2 className="font-medium">Neuer Lagerort</h2>
@@ -80,11 +99,36 @@ export default function LocationsPage() {
         </form>
       </section>
 
-      <section className="card">
+      <section className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="w-auto"
+              checked={locations.length > 0 && selectedIds.size === locations.length}
+              onChange={toggleSelectAll}
+            />
+            Alle auswählen
+          </label>
+          {selectedIds.size > 0 && (
+            <a
+              href={apiUrl(`/api/locations/labels/pdf?ids=${Array.from(selectedIds).join(",")}`)}
+              className="btn text-sm"
+            >
+              {selectedIds.size} ausgewählte Labels drucken
+            </a>
+          )}
+        </div>
         <ul className="divide-y text-sm">
           {locations.map((loc) => (
-            <li key={loc.id} className="py-2 flex items-center justify-between">
-              <span>{pathFor(loc)}</span>
+            <li key={loc.id} className="py-2 flex items-center gap-3">
+              <input
+                type="checkbox"
+                className="w-auto"
+                checked={selectedIds.has(loc.id)}
+                onChange={() => toggleSelected(loc.id)}
+              />
+              <span className="flex-1">{pathFor(loc)}</span>
               <span className="text-gray-400 font-mono text-xs">{loc.qrCode}</span>
             </li>
           ))}
