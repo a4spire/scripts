@@ -47,6 +47,12 @@ enum AiCaptureStatus {
   EDITED
 }
 
+enum ShoppingListItemStatus {
+  OPEN
+  ORDERED
+  DONE
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -112,6 +118,7 @@ model Item {
 
   movements      StockMovement[]
   aiCaptures     AiCapture[]
+  shoppingListItems ShoppingListItem[]
 
   @@index([categoryId])
   @@index([locationId])
@@ -168,4 +175,20 @@ model AiCapture {
   confirmedAt     DateTime?
 
   @@map("ai_captures")
+}
+
+// Manuell oder aus Mindestbestand-Unterschreitungen generierte Einträge; itemId ist null bei
+// frei eingetragenen Positionen (z.B. Werkzeug, das kein Lagerartikel ist).
+model ShoppingListItem {
+  id         String                 @id @default(cuid())
+  itemId     String?
+  item       Item?                  @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  customName String?
+  quantity   Decimal                @db.Decimal(12, 3)
+  note       String?
+  status     ShoppingListItemStatus @default(OPEN)
+  createdAt  DateTime               @default(now())
+  resolvedAt DateTime?
+
+  @@map("shopping_list_items")
 }

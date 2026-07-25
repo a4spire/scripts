@@ -95,6 +95,18 @@ export interface Project {
   totalCost?: string;
 }
 
+export interface ShoppingListItem {
+  id: string;
+  itemId: string | null;
+  customName: string | null;
+  quantity: string;
+  note: string | null;
+  status: "OPEN" | "ORDERED" | "DONE";
+  createdAt: string;
+  resolvedAt: string | null;
+  item?: (Item & { location?: Location | null }) | null;
+}
+
 export interface StockMovement {
   id: string;
   itemId: string;

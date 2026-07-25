@@ -10,6 +10,7 @@ const links = [
   { href: "/locations", label: "Lagerorte" },
   { href: "/projects", label: "Projekte" },
   { href: "/stats", label: "Statistik" },
+  { href: "/shopping-list", label: "Einkaufsliste" },
   { href: "/scan", label: "Scannen" },
   { href: "/capture", label: "KI-Erfassung" },
 ];

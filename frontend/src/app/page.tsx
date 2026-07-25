@@ -22,7 +22,14 @@ export default function DashboardPage() {
       <h1 className="text-xl font-semibold">Dashboard</h1>
 
       <section className="card">
-        <h2 className="font-medium mb-3">Mindestbestand unterschritten</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-medium">Mindestbestand unterschritten</h2>
+          {lowStock !== null && lowStock.length > 0 && (
+            <Link href="/shopping-list" className="text-sm text-blue-600 hover:underline">
+              Zur Einkaufsliste
+            </Link>
+          )}
+        </div>
         {lowStock === null && <p className="text-sm text-gray-500">Lädt…</p>}
         {lowStock?.length === 0 && (
           <p className="text-sm text-gray-500">Alles im grünen Bereich, keine Warnungen.</p>
@@ -58,6 +65,9 @@ export default function DashboardPage() {
         </Link>
         <Link href="/stats" className="card text-center hover:bg-gray-50">
           Statistik
+        </Link>
+        <Link href="/shopping-list" className="card text-center hover:bg-gray-50">
+          Einkaufsliste
         </Link>
         <Link href="/scan" className="card text-center hover:bg-gray-50">
           Scannen
