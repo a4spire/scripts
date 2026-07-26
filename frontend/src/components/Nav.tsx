@@ -36,7 +36,11 @@ export function Nav() {
           </Link>
         ))}
         <div className="ml-auto flex items-center gap-2 text-sm text-gray-500 whitespace-nowrap">
-          {user && <span>{user.displayName}</span>}
+          {user && (
+            <Link href="/settings" className="hover:text-gray-900 hover:underline">
+              {user.displayName}
+            </Link>
+          )}
           {user && (
             <button onClick={logout} className="px-2 py-1 rounded hover:bg-gray-100">
               Abmelden

@@ -119,6 +119,18 @@ all methods; v11 (Fastify 5, current) defaults to `GET,HEAD,POST` only, which si
 PATCH/DELETE route for browser clients (fails at the CORS preflight, not at the route) unless
 overridden. If you add a new HTTP method anywhere, update this list too.
 
+### Error handling
+
+`server.ts` calls `fastify.setErrorHandler(...)` — which maps a thrown `ZodError` from any route's
+`schema.parse(request.body)` to a clean `400` instead of Fastify's default `500` — **before**
+`fastify.register()`-ing any route plugin (cors/multipart/static are fine either side, but auth/items/
+movements/etc. are not). Each `fastify.register(pluginFn)` call creates a new encapsulated child
+context that snapshots the error handler in effect *at registration time*; a handler set on the root
+instance afterwards is invisible to routes registered earlier, so they silently keep falling back to
+Fastify's default `{statusCode:500,"error":"Internal Server Error"}` shape. This is easy to get backwards
+(it did, once) since nothing errors at startup — only a bad-input request against an already-registered
+route reveals it.
+
 ### Auth
 
 Cookie session via `@fastify/session` (in-memory store — fine for one Fastify instance, would need a
